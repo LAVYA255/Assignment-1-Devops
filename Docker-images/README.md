@@ -6,7 +6,7 @@
 
 ---
 
-## Task 1 — Run the Multi-Stage Dockerfile
+## Task 1 - Run the Multi-Stage Dockerfile
 
 A Go web application is compiled in a `golang` builder stage, and only the resulting static binary is copied into a `scratch` image. The application serves **`Hello World from Docker multi-stage build`** on **port 8080**.
 
@@ -138,7 +138,7 @@ Run 'docker run --help' for more information
 
 ---
 
-## Task 2 — Documentation and Evidence
+## Task 2 - Documentation and Evidence
 
 ### Application running successfully
 
@@ -161,7 +161,7 @@ NAMES              IMAGE                  STATUS         PORTS
 multistage-hello   multistage-hello:1.0   Up 3 seconds   0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
 ```
 
-The `PORTS` column confirms **`0.0.0.0:8080->8080/tcp`** — host port 8080 mapped to container port 8080, exactly as required.
+The `PORTS` column confirms **`0.0.0.0:8080->8080/tcp`** - host port 8080 mapped to container port 8080, exactly as required.
 
 ### The size difference
 
@@ -185,16 +185,16 @@ A multi-stage build draws a line between the two. `COPY --from=builder` reaches 
 
 The benefits are concrete:
 
-- **Size** — 7.3 MB instead of 477 MB. Faster to push, pull and deploy, and much cheaper to store across many versions.
-- **Security** — the final image is `scratch`: no shell, no package manager, no compiler. An attacker who reaches the container has no tools to work with. The output above shows this directly: running `/bin/sh` inside the image fails, because there is no shell in it at all.
-- **No source leakage** — the Go source never reaches the shipped image.
-- **Reproducibility** — the build toolchain is pinned inside the Dockerfile, so the build does not depend on what happens to be installed on the machine running it.
+- **Size** - 7.3 MB instead of 477 MB. Faster to push, pull and deploy, and much cheaper to store across many versions.
+- **Security** - the final image is `scratch`: no shell, no package manager, no compiler. An attacker who reaches the container has no tools to work with. The output above shows this directly: running `/bin/sh` inside the image fails, because there is no shell in it at all.
+- **No source leakage** - the Go source never reaches the shipped image.
+- **Reproducibility** - the build toolchain is pinned inside the Dockerfile, so the build does not depend on what happens to be installed on the machine running it.
 
 The same pattern appears in the other apps in this repository: the [React app](../Docker-Fundamentals/react-app/Dockerfile) builds with Node and ships on Nginx, and the [Java app](../Docker-Fundamentals/java-app/Dockerfile) compiles on the JDK and ships on the JRE.
 
 ---
 
-## Task 3 — Deploy at Least 3 Different Types of Applications
+## Task 3 - Deploy at Least 3 Different Types of Applications
 
 Three application types were built and deployed as containers, each verified with a browser screenshot and an HTTP 200 response. Full details are in [Docker-Fundamentals](../Docker-Fundamentals/README.md).
 
@@ -204,7 +204,7 @@ Three application types were built and deployed as containers, each verified wit
 | 2 | **Python** | Flask | `hello-python:1.0` | 8082 | [screenshot](../screenshots/02-python-app.png) |
 | 3 | **Java** | JDK HttpServer | `hello-java:1.0` | 8083 | [screenshot](../screenshots/03-java-app.png) |
 
-Three more were deployed beyond the requirement — Apache (8084), React (8085) and Nginx (8086).
+Three more were deployed beyond the requirement - Apache (8084), React (8085) and Nginx (8086).
 
 ```console
 $ docker ps

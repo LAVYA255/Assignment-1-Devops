@@ -1,4 +1,4 @@
-# DevOps Homework — Assignment 1
+# DevOps Homework - Assignment 1
 
 **Name:** Lavya
 
@@ -15,7 +15,7 @@ Every command in this repository was actually executed, and every output block i
 | Module | Folder | What it covers |
 |---|---|---|
 | Linux Fundamentals | [Linux-Fundamentals](Linux-Fundamentals/README.md) | Soft vs hard links, `adduser` vs `useradd`, `journalctl`, command cheat sheet |
-| Shell Scripting | [Shell-Scripting](Shell-Scripting/README.md) | `sysinfo.sh` — system report with user input and output redirection |
+| Shell Scripting | [Shell-Scripting](Shell-Scripting/README.md) | `sysinfo.sh` - system report with user input and output redirection |
 | Networking | [Networking](Networking/README.md) | 15 networking commands with output and explanations |
 | Git / GitHub | [Git-GitHub](Git-GitHub/README.md) | `git commit -a -m` vs `git commit -m`, cherry-pick |
 | Docker Fundamentals | [Docker-Fundamentals](Docker-Fundamentals/README.md) | Six Hello World web apps, each containerised |
@@ -151,11 +151,11 @@ The running containers were given `--restart unless-stopped`, so they come back 
 
 ## Highlights
 
-**Multi-stage builds cut the image from 477 MB to 7.3 MB** — a 65× reduction for the same application, with no shell or package manager left in the final `scratch` image. See [Docker-images](Docker-images/README.md).
+**Multi-stage builds cut the image from 477 MB to 7.3 MB** - a 65× reduction for the same application, with no shell or package manager left in the final `scratch` image. See [Docker-images](Docker-images/README.md).
 
-**Container network isolation demonstrated, not just described.** The frontend cannot even *resolve* the database's name, because they share no network — a DNS failure rather than a timeout. See [Docker-Networking](Docker-Networking/README.md).
+**Container network isolation demonstrated, not just described.** The frontend cannot even *resolve* the database's name, because they share no network - a DNS failure rather than a timeout. See [Docker-Networking](Docker-Networking/README.md).
 
-**Bind mounts reflect host edits live.** The same container, never restarted, serves updated content the instant the host file changes — captured in before/after screenshots.
+**Bind mounts reflect host edits live.** The same container, never restarted, serves updated content the instant the host file changes - captured in before/after screenshots.
 
 **Hard links survive deleting the original; soft links do not.** Proven with inode numbers and link counts. See [Linux-Fundamentals](Linux-Fundamentals/README.md).
 

@@ -1,4 +1,4 @@
-# Docker Fundamentals — Hello World Applications
+# Docker Fundamentals - Hello World Applications
 
 Six Hello World web applications, each in its own folder with its own Dockerfile, each built into an image, run as a container and verified in a browser.
 
@@ -84,7 +84,7 @@ hello-nodejs   hello-nodejs:1.0   Up 7 seconds   0.0.0.0:8081->3000/tcp, [::]:80
 
 Express server rendering the page and reporting the Node version and container hostname.
 
-**Dockerfile** — copies `package.json` and installs dependencies *before* copying the source, so the `npm install` layer stays cached when only application code changes.
+**Dockerfile** - copies `package.json` and installs dependencies *before* copying the source, so the `npm install` layer stays cached when only application code changes.
 
 ```dockerfile
 FROM node:20-alpine
@@ -155,7 +155,7 @@ EXPOSE 80
 
 ## 5. React application
 
-A real Vite + React build, not a static page. The Dockerfile is **multi-stage**: Node builds the production bundle, then only the compiled `dist/` output is copied into an Nginx image — so Node and `node_modules` never reach the final image. That is why this image is **73.8 MB** rather than several hundred.
+A real Vite + React build, not a static page. The Dockerfile is **multi-stage**: Node builds the production bundle, then only the compiled `dist/` output is copied into an Nginx image - so Node and `node_modules` never reach the final image. That is why this image is **73.8 MB** rather than several hundred.
 
 ```dockerfile
 FROM node:20-alpine AS builder
@@ -171,7 +171,7 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
 ```
 
-The click counter in the screenshot is live React state — proof the JavaScript bundle is executing, not just being served.
+The click counter in the screenshot is live React state - proof the JavaScript bundle is executing, not just being served.
 
 ![React Hello World](../screenshots/05-react-app.png)
 
@@ -189,7 +189,7 @@ EXPOSE 80
 
 ---
 
-## Verification — HTTP response from every application
+## Verification - HTTP response from every application
 
 Each container was also verified from the command line. All six return **HTTP 200**.
 
@@ -298,8 +298,8 @@ HTTP status: 200
 
 **Layer caching.** In the Node.js and Python Dockerfiles the dependency manifest is copied and installed *before* the source code. Docker caches each instruction as a layer and invalidates every layer after the first change, so ordering it this way means editing `server.js` does not trigger a fresh `npm install`.
 
-**Multi-stage builds cut image size dramatically.** The React app builds with Node but ships on Nginx (73.8 MB), and the Java app compiles on the JDK but ships on the JRE. Build tools are needed to *produce* an artefact, never to *run* it — the smaller final image is faster to ship and has a smaller attack surface.
+**Multi-stage builds cut image size dramatically.** The React app builds with Node but ships on Nginx (73.8 MB), and the Java app compiles on the JDK but ships on the JRE. Build tools are needed to *produce* an artefact, never to *run* it - the smaller final image is faster to ship and has a smaller attack surface.
 
 **Port mapping is explicit.** `-p 8081:3000` maps host port 8081 to container port 3000. `EXPOSE` in a Dockerfile is only documentation; the `-p` flag is what actually publishes the port.
 
-**Containers are isolated.** Each page reports its own hostname — `911e2724d30b`, `2c68177e7f71`, `95b01db6c231` — which is the container ID. Six web servers run simultaneously on one machine, each with its own filesystem, process space and network namespace, with no port conflicts.
+**Containers are isolated.** Each page reports its own hostname - `911e2724d30b`, `2c68177e7f71`, `95b01db6c231` - which is the container ID. Six web servers run simultaneously on one machine, each with its own filesystem, process space and network namespace, with no port conflicts.

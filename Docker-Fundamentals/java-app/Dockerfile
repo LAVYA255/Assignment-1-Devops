@@ -6,7 +6,7 @@ WORKDIR /build
 COPY HelloWorld.java ./
 RUN javac HelloWorld.java
 
-# Stage 2: runtime — only the compiled .class files are carried over
+# Stage 2: runtime - only the compiled .class files are carried over
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=builder /build/*.class ./

@@ -19,7 +19,7 @@ Networking commands practised on **Ubuntu 26.04 LTS** (WSL2), with the real outp
 | `netstat -tuln` | Legacy equivalent of `ss` |
 | `curl url` | Makes an HTTP request from the command line |
 | `wget url` | Downloads a file over HTTP/HTTPS |
-| `ip neigh` | The ARP table — MAC addresses of local neighbours |
+| `ip neigh` | The ARP table - MAC addresses of local neighbours |
 | `nc -zv host port` | Tests whether a specific TCP port is open |
 | `cat /etc/resolv.conf` | Shows which DNS servers the system uses |
 | `cat /etc/hosts` | Static, local name-to-IP mappings checked before DNS |
@@ -304,21 +304,21 @@ ff02::2 ip6-allrouters
 ## What I understood from each command
 
 ### 1. `ip addr show`
-Lists every network interface with its IP address, MAC address and state. Here `eth0` holds **172.21.101.146/20** — the address WSL2 gets on its virtual switch — alongside the `lo` loopback interface on 127.0.0.1. This is the first command to run when a machine "has no network": if there is no IP on the interface, nothing else will work. The `docker0` interface on **172.17.0.1/16** is the bridge Docker created for containers — it shows up here as soon as Docker is installed.
+Lists every network interface with its IP address, MAC address and state. Here `eth0` holds **172.21.101.146/20** - the address WSL2 gets on its virtual switch - alongside the `lo` loopback interface on 127.0.0.1. This is the first command to run when a machine "has no network": if there is no IP on the interface, nothing else will work. The `docker0` interface on **172.17.0.1/16** is the bridge Docker created for containers - it shows up here as soon as Docker is installed.
 
 ### 2. `ip route show`
-The routing table — the kernel's decision list for where to send a packet. The `default via ...` line is the **default gateway**, used for any destination not matched by a more specific route. A missing default route is the classic cause of "I can ping local machines but not the internet".
+The routing table - the kernel's decision list for where to send a packet. The `default via ...` line is the **default gateway**, used for any destination not matched by a more specific route. A missing default route is the classic cause of "I can ping local machines but not the internet".
 
 ### 3. `hostname` / `hostname -I`
 `hostname` returns the machine's name (`Vlair-Lavya`); `-I` prints just its IP addresses, which is handy in scripts because it avoids parsing `ip addr` output.
 
 ### 4. `ping`
-Sends ICMP echo requests and reports which came back and how long each took. Both tests show **0% packet loss**, with round-trip times around 16–31 ms to 8.8.8.8. `ping google.com` additionally proves DNS is working, because the name had to be resolved to 192.178.173.102 before any packet was sent. The `ttl=119` value is the remaining time-to-live: each router decrements it, so a lower number means more hops were crossed.
+Sends ICMP echo requests and reports which came back and how long each took. Both tests show **0% packet loss**, with round-trip times around 16-31 ms to 8.8.8.8. `ping google.com` additionally proves DNS is working, because the name had to be resolved to 192.178.173.102 before any packet was sent. The `ttl=119` value is the remaining time-to-live: each router decrements it, so a lower number means more hops were crossed.
 
 Pinging an **IP** tests pure connectivity; pinging a **name** tests DNS *and* connectivity. Comparing the two isolates a DNS fault from a routing fault.
 
 ### 5. `traceroute`
-Maps the path to a destination by sending packets with deliberately small TTL values, so each router along the way is forced to reply. The trace to 8.8.8.8 shows the full seven-hop path: the WSL gateway (172.21.96.1), the local ISP (`wifi.height8tech.com`, `dvois.com`), then Google's network (72.14.208.165 onwards) and finally `dns.google`. This pinpoints *where* latency appears — the 121 ms jump at hop 2 is the local ISP link.
+Maps the path to a destination by sending packets with deliberately small TTL values, so each router along the way is forced to reply. The trace to 8.8.8.8 shows the full seven-hop path: the WSL gateway (172.21.96.1), the local ISP (`wifi.height8tech.com`, `dvois.com`), then Google's network (72.14.208.165 onwards) and finally `dns.google`. This pinpoints *where* latency appears - the 121 ms jump at hop 2 is the local ISP link.
 
 The trace to `google.com` stops after hop 1 because those routers are configured not to reply to the probes. `*` or an early stop means "this hop stayed silent", not necessarily "the path is broken".
 
@@ -326,10 +326,10 @@ The trace to `google.com` stops after hop 1 because those routers are configured
 The basic DNS lookup: a domain name in, IP addresses out. It also names the resolver that answered, which matters when you are debugging whether a stale or wrong DNS server is being used.
 
 ### 7. `dig`
-A more detailed DNS tool. `dig google.com +noall +answer` prints just the answer section with the record type and its **TTL** (how long it may be cached). `dig google.com MX +short` fetches mail-exchanger records, showing that DNS carries far more than address records — `A`, `AAAA`, `MX`, `CNAME`, `TXT`, `NS`.
+A more detailed DNS tool. `dig google.com +noall +answer` prints just the answer section with the record type and its **TTL** (how long it may be cached). `dig google.com MX +short` fetches mail-exchanger records, showing that DNS carries far more than address records - `A`, `AAAA`, `MX`, `CNAME`, `TXT`, `NS`.
 
 ### 8. `ss -tuln`
-Lists sockets in the listening state. This answers "is my service actually up, and on which interface?" A service bound to `127.0.0.1` accepts only local connections, while one bound to `0.0.0.0` accepts connections from anywhere — a distinction that explains a great many "the port is open but I cannot connect" problems.
+Lists sockets in the listening state. This answers "is my service actually up, and on which interface?" A service bound to `127.0.0.1` accepts only local connections, while one bound to `0.0.0.0` accepts connections from anywhere - a distinction that explains a great many "the port is open but I cannot connect" problems.
 
 ### 9. `netstat -tuln`
 The older tool that does the same job. It still appears everywhere in documentation, but `ss` is faster and is what modern systems ship, so `ss` is the one to reach for.
@@ -341,7 +341,7 @@ Makes HTTP requests from the terminal. `curl -I` fetches only the **response hea
 Downloads files over HTTP/HTTPS. The practical split: `curl` is for *inspecting* and interacting with endpoints, `wget` is for *retrieving* files (and, with `-r`, recursively mirroring a site).
 
 ### 12. `ip neigh`
-The ARP table, mapping IP addresses to the MAC addresses of machines on the local segment. ARP is what makes delivery on a local network possible, since Ethernet frames are addressed by MAC, not IP. Relevant only to the local subnet — anything beyond the gateway is never in this table.
+The ARP table, mapping IP addresses to the MAC addresses of machines on the local segment. ARP is what makes delivery on a local network possible, since Ethernet frames are addressed by MAC, not IP. Relevant only to the local subnet - anything beyond the gateway is never in this table.
 
 ### 13. `nc` (netcat)
 Tests whether a TCP port accepts connections. The contrast in the output is the useful part: port **443 on google.com reports `open`**, while port **81 times out**. This distinguishes "the host is up but the service is not listening" from "the host is unreachable", and is the fastest way to check whether a firewall is blocking a port.
@@ -350,7 +350,7 @@ Tests whether a TCP port accepts connections. The contrast in the output is the 
 Lists the DNS servers (`nameserver` entries) the system consults. If name resolution fails while raw IP connectivity works, this file is the first place to look.
 
 ### 15. `/etc/hosts`
-Static name-to-IP mappings, checked **before** DNS. Useful for pointing a hostname at a test server locally without touching real DNS — and worth remembering, because an entry here silently overrides the DNS answer.
+Static name-to-IP mappings, checked **before** DNS. Useful for pointing a hostname at a test server locally without touching real DNS - and worth remembering, because an entry here silently overrides the DNS answer.
 
 ---
 

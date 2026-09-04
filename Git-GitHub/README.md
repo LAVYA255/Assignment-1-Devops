@@ -4,7 +4,7 @@ Both tasks were run in throwaway repositories so the demonstration commits stay 
 
 ---
 
-## Task 1 — `git commit -a -m` vs `git commit -m`
+## Task 1 - `git commit -a -m` vs `git commit -m`
 
 ### The difference
 
@@ -20,7 +20,7 @@ Git has three areas: the **working directory** (your files), the **staging area 
 
 The critical point, and the usual interview follow-up: **`-a` does not add untracked files.** It only picks up files Git is already tracking. A brand-new file must always be `git add`-ed first.
 
-`-a` is a convenience for the common "I edited a few files that Git already knows about" case. It is worth being deliberate about, because it stages *every* modified tracked file — including changes you may not have meant to commit. Staging explicitly with `git add` gives you control over what goes into each commit.
+`-a` is a convenience for the common "I edited a few files that Git already knows about" case. It is worth being deliberate about, because it stages *every* modified tracked file - including changes you may not have meant to commit. Staging explicitly with `git add` gives you control over what goes into each commit.
 
 ### Commands
 
@@ -109,17 +109,17 @@ $ git status
 
 ### What the output proves
 
-1. **Part A** — with `file.txt` modified and `newfile.txt` untracked, `git commit -m` **refused to commit**: `no changes added to commit (use "git add" and/or "git commit -a")`. The log still shows only the initial commit.
-2. **Part B** — `git commit -a -m` succeeded immediately: `[main 976571d] ... 1 file changed, 1 insertion(+)`. It auto-staged the modified tracked file.
-3. **Part C** — running `git commit -a -m` again reports `nothing added to commit but untracked files present`. This is the proof that **`-a` never picks up new files**; `newfile.txt` had to be `git add`-ed explicitly.
+1. **Part A** - with `file.txt` modified and `newfile.txt` untracked, `git commit -m` **refused to commit**: `no changes added to commit (use "git add" and/or "git commit -a")`. The log still shows only the initial commit.
+2. **Part B** - `git commit -a -m` succeeded immediately: `[main 976571d] ... 1 file changed, 1 insertion(+)`. It auto-staged the modified tracked file.
+3. **Part C** - running `git commit -a -m` again reports `nothing added to commit but untracked files present`. This is the proof that **`-a` never picks up new files**; `newfile.txt` had to be `git add`-ed explicitly.
 
 ---
 
-## Task 2 — Git Cherry-Pick
+## Task 2 - Git Cherry-Pick
 
 ### What cherry-pick does
 
-`git cherry-pick <hash>` takes the **change introduced by one specific commit** and replays it onto the current branch. It is how you pull a single fix out of a feature branch — for example a hotfix that must ship now, while the rest of that branch is not ready to merge.
+`git cherry-pick <hash>` takes the **change introduced by one specific commit** and replays it onto the current branch. It is how you pull a single fix out of a feature branch - for example a hotfix that must ship now, while the rest of that branch is not ready to merge.
 
 Merge and cherry-pick are different tools: **merge** brings across the entire history of a branch, whereas **cherry-pick** copies one commit's diff. The copy is a *new* commit with a **new hash**, because its parent is different.
 
@@ -275,12 +275,12 @@ $ git log --oneline --all --graph   (the cherry-picked commit has a NEW hash)
 
 Following the required steps exactly:
 
-1. **4 commits created on `main`** — C1 through C4, listed with `git log --oneline`.
-2. **A new branch created** — `git checkout -b feature`.
-3. **3 commits made on `feature`** — F1, F2 (the hotfix) and F3.
-4. **`git log` used to identify one specific commit** — `git log --oneline --grep="HOTFIX"` found `333ba94`, and `git show 333ba94 --stat` confirmed it adds `hotfix.txt`.
-5. **Cherry-picked into `main`** — `git cherry-pick 333ba94` reported `[main c530656] ... create mode 100644 hotfix.txt`.
-6. **Verified** — after the cherry-pick, `main` contains `hotfix.txt` with the correct content, while `auth.py` (F1) and `docs.md` (F3) are **absent**. Only the selected commit came across.
+1. **4 commits created on `main`** - C1 through C4, listed with `git log --oneline`.
+2. **A new branch created** - `git checkout -b feature`.
+3. **3 commits made on `feature`** - F1, F2 (the hotfix) and F3.
+4. **`git log` used to identify one specific commit** - `git log --oneline --grep="HOTFIX"` found `333ba94`, and `git show 333ba94 --stat` confirmed it adds `hotfix.txt`.
+5. **Cherry-picked into `main`** - `git cherry-pick 333ba94` reported `[main c530656] ... create mode 100644 hotfix.txt`.
+6. **Verified** - after the cherry-pick, `main` contains `hotfix.txt` with the correct content, while `auth.py` (F1) and `docs.md` (F3) are **absent**. Only the selected commit came across.
 
 The final graph shows the mechanism clearly:
 

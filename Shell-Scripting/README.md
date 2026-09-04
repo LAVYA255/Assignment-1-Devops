@@ -1,4 +1,4 @@
-# Shell Scripting — System Information Script
+# Shell Scripting - System Information Script
 
 The script [`sysinfo.sh`](sysinfo.sh) prints system information, takes input from the user, creates a directory and a file, and saves the running-process list into that file using output redirection.
 
@@ -114,7 +114,7 @@ chmod +x sysinfo.sh
 ./sysinfo.sh
 ```
 
-The script pauses at two `read -p` prompts. In the captured run below the answers `system_reports` and `running_processes.txt` were supplied on standard input, which is why the prompt text itself does not appear in the transcript — Bash only renders a `read -p` prompt when standard input is an interactive terminal.
+The script pauses at two `read -p` prompts. In the captured run below the answers `system_reports` and `running_processes.txt` were supplied on standard input, which is why the prompt text itself does not appear in the transcript - Bash only renders a `read -p` prompt when standard input is an interactive terminal.
 
 ---
 
@@ -208,7 +208,7 @@ total 8
 - **`df -h`** lists every mounted filesystem with human-readable sizes.
 - **`ps aux | head -10`** shows the running processes.
 - The two **`read -p`** prompts captured `system_reports` and `running_processes.txt`.
-- **`mkdir -p`** created the directory and **`touch`** created the file — both confirmed by the final `ls -lR`, which shows `system_reports/running_processes.txt` at 4589 bytes.
+- **`mkdir -p`** created the directory and **`touch`** created the file - both confirmed by the final `ls -lR`, which shows `system_reports/running_processes.txt` at 4589 bytes.
 - **`ps aux > "$DIR_NAME/$FILE_NAME"`** redirected the full process table into the file; `wc -l` counts **43 lines**, and `head -5` prints the saved content back to prove the redirection worked.
 
-Note that `head -10` in the on-screen listing shows 10 lines, while the saved file holds all 43 processes — the redirection captured the complete `ps aux` output, not the truncated view.
+Note that `head -10` in the on-screen listing shows 10 lines, while the saved file holds all 43 processes - the redirection captured the complete `ps aux` output, not the truncated view.

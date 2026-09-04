@@ -6,7 +6,7 @@ Environment: **Docker Engine 29.1.3** on Ubuntu 26.04 LTS (WSL2).
 
 ---
 
-## Task 1 — Docker Container Networking
+## Task 1 - Docker Container Networking
 
 Three containers (frontend, backend, database) and three networks, with the **backend attached to two networks** so it is the only path between the frontend and the database.
 
@@ -51,7 +51,7 @@ docker network connect database-net backend
 # 4. Test connectivity
 docker exec backend  ping -c 3 frontend    # works
 docker exec backend  ping -c 3 database    # works
-docker exec frontend ping -c 2 database    # fails — isolated
+docker exec frontend ping -c 2 database    # fails - isolated
 ```
 
 ### Output
@@ -191,15 +191,15 @@ frontend   nginx:1.27-alpine   Up About a minute
 | `backend → database` | **0% packet loss**, and MySQL's port 3306 reports `open` | Both are on `database-net` |
 | `frontend → database` | **`ping: bad address 'database'`** | No shared network |
 
-The third result is the important one. The failure is `bad address` — a **DNS** failure, not a timeout. Docker's embedded DNS resolver (127.0.0.11) only answers for containers that share a network with the one asking, so the frontend cannot even resolve the name `database`, let alone route to it. **Isolation is the default**, and containers only reach each other when explicitly placed on a common network.
+The third result is the important one. The failure is `bad address` - a **DNS** failure, not a timeout. Docker's embedded DNS resolver (127.0.0.11) only answers for containers that share a network with the one asking, so the frontend cannot even resolve the name `database`, let alone route to it. **Isolation is the default**, and containers only reach each other when explicitly placed on a common network.
 
 `docker exec backend ip addr show` confirms the dual attachment: **`eth0` on 172.18.0.3** (frontend-net) and **`eth1` on 172.20.0.3** (database-net). Joining a network gives a container another interface, which is exactly how a backend acts as a controlled gateway between a public tier and a private database tier.
 
-Note also that container **names** resolve — `nslookup frontend` returns 172.18.0.2. This automatic DNS is provided by *user-defined* networks, not by the legacy default bridge, and it is why you address services by name rather than by hard-coded IP.
+Note also that container **names** resolve - `nslookup frontend` returns 172.18.0.2. This automatic DNS is provided by *user-defined* networks, not by the legacy default bridge, and it is why you address services by name rather than by hard-coded IP.
 
 ---
 
-## Task 2 — Host Network
+## Task 2 - Host Network
 
 ### Commands
 
@@ -209,7 +209,7 @@ docker run -d --name apache-host --network host httpd:2.4
 curl http://localhost:80
 ```
 
-With `--network host` the container does **not** get its own network namespace — it shares the host's. No `-p` flag is used or possible: the container binds directly to the host's port 80.
+With `--network host` the container does **not** get its own network namespace - it shares the host's. No `-p` flag is used or possible: the container binds directly to the host's port 80.
 
 ### Output and screenshot
 
@@ -220,7 +220,7 @@ Apache served directly on port 80 with no port mapping:
 ### What the output proves
 
 - `curl http://localhost:80` returns Apache's `It works!` page with **HTTP status 200**, even though no `-p` flag was given.
-- `docker ps` shows an **empty `PORTS` column** — there is no mapping to display, because there is no NAT layer at all.
+- `docker ps` shows an **empty `PORTS` column** - there is no mapping to display, because there is no NAT layer at all.
 - `docker inspect apache-host -f '{{.HostConfig.NetworkMode}}'` returns `host`.
 
 ### Bridge vs host networking
@@ -229,8 +229,8 @@ Apache served directly on port 80 with no port mapping:
 |---|---|---|
 | Network namespace | Its own | **Shares the host's** |
 | Container IP | Private (e.g. 172.17.0.2) | The host's own IP |
-| Publishing ports | Requires `-p 8080:80` | Not applicable — binds directly |
-| Port conflicts | None; many containers can use port 80 internally | **Real** — only one process per host port |
+| Publishing ports | Requires `-p 8080:80` | Not applicable - binds directly |
+| Port conflicts | None; many containers can use port 80 internally | **Real** - only one process per host port |
 | Performance | Slight NAT overhead | No NAT overhead |
 | Isolation | Strong | **Weak** |
 
@@ -238,7 +238,7 @@ Host networking is worth using for high-throughput workloads where the NAT hop m
 
 ---
 
-## Task 3 — Bind Mount
+## Task 3 - Bind Mount
 
 ### Commands
 
@@ -255,13 +255,13 @@ curl http://localhost:8090      # new content, no restart
 
 The folder is [`bind-mount-demo/`](bind-mount-demo/) in this repository.
 
-### Before — the original file
+### Before - the original file
 
 `index.html` contains `Hello students`:
 
 ![Bind mount before the edit](../screenshots/09-bind-mount-before.png)
 
-### After — the file edited on the host, container never restarted
+### After - the file edited on the host, container never restarted
 
 ![Bind mount after the edit](../screenshots/10-bind-mount-after.png)
 
@@ -367,9 +367,9 @@ $ curl -s http://localhost:8090
 
 ### What the output proves
 
-1. The container serves `Hello students` from the **host's** folder — nothing was copied into the image.
+1. The container serves `Hello students` from the **host's** folder - nothing was copied into the image.
 2. `docker inspect` confirms the mount type is **`bind`**, from the host path to `/usr/share/nginx/html`, mounted read-only (`ro=true`).
-3. After editing `index.html` **on the host**, the very next request returns the new content — with **no `docker restart`, no rebuild and no `docker cp`**.
+3. After editing `index.html` **on the host**, the very next request returns the new content - with **no `docker restart`, no rebuild and no `docker cp`**.
 
 A bind mount maps a host directory straight into the container, so both sides see the same files on the same underlying disk. The container was never restarted; Nginx simply reads the file from disk on each request and the file it reads *is* the host's file.
 
@@ -379,7 +379,7 @@ A bind mount maps a host directory straight into the container, so both sides se
 |---|---|---|
 | Location | Any host path you choose | Managed by Docker under `/var/lib/docker/volumes` |
 | Created with | `-v /host/path:/container/path` | `-v myvolume:/container/path` |
-| Best for | **Development** — live source editing | **Production** — databases, persistent app data |
+| Best for | **Development** - live source editing | **Production** - databases, persistent app data |
 | Portability | Tied to the host's directory layout | Portable, host-independent |
 | Backup | Ordinary file copying | `docker volume` commands |
 
@@ -387,23 +387,23 @@ The `:ro` suffix mounts read-only, which is good practice whenever the container
 
 ---
 
-## Task 4 — Overlay Network
+## Task 4 - Overlay Network
 
 ### Research: what an overlay network is
 
 A **bridge** network connects containers **on one host**. An **overlay** network connects containers **across many hosts**, making a multi-machine cluster behave like one flat network.
 
-It works by **VXLAN encapsulation**. Each container's Ethernet frame is wrapped inside a UDP packet (VXLAN, port 4789), sent across the physical network to the right host, then unwrapped and delivered to the destination container. The containers themselves are unaware of any of it — they simply see one shared subnet. This is why the overlay interface has an **MTU of 1450** rather than 1500 in the output below: 50 bytes are reserved for the VXLAN header.
+It works by **VXLAN encapsulation**. Each container's Ethernet frame is wrapped inside a UDP packet (VXLAN, port 4789), sent across the physical network to the right host, then unwrapped and delivered to the destination container. The containers themselves are unaware of any of it - they simply see one shared subnet. This is why the overlay interface has an **MTU of 1450** rather than 1500 in the output below: 50 bytes are reserved for the VXLAN header.
 
-Docker keeps the necessary state — which container lives on which host, and their IP assignments — in the swarm's distributed key-value store, so every node can route to every container.
+Docker keeps the necessary state - which container lives on which host, and their IP assignments - in the swarm's distributed key-value store, so every node can route to every container.
 
 **Use cases**
 
-- **Multi-host container communication** — the core purpose: a service on host A talking to a database on host B by name.
-- **Docker Swarm services** — replicas scheduled across different machines still share one network.
-- **Scaling out** — an application outgrows one machine, and containers must keep talking as if nothing changed.
-- **Service discovery across a cluster** — a service name resolves to a virtual IP that load-balances across every replica, wherever they run.
-- **Network segmentation in a cluster** — separate overlays isolate different application tiers cluster-wide.
+- **Multi-host container communication** - the core purpose: a service on host A talking to a database on host B by name.
+- **Docker Swarm services** - replicas scheduled across different machines still share one network.
+- **Scaling out** - an application outgrows one machine, and containers must keep talking as if nothing changed.
+- **Service discovery across a cluster** - a service name resolves to a virtual IP that load-balances across every replica, wherever they run.
+- **Network segmentation in a cluster** - separate overlays isolate different application tiers cluster-wide.
 
 **How it works across multiple hosts**
 
@@ -414,7 +414,7 @@ Docker keeps the necessary state — which container lives on which host, and th
 5. Traffic between containers on different hosts is VXLAN-encapsulated over the physical network and decapsulated at the far end.
 6. Docker's embedded DNS resolves service names to a **virtual IP (VIP)** that load-balances across the replicas.
 
-**Requirements** — swarm mode, plus these ports open between hosts: **TCP 2377** (cluster management), **TCP+UDP 7946** (node discovery), and **UDP 4789** (VXLAN data).
+**Requirements** - swarm mode, plus these ports open between hosts: **TCP 2377** (cluster management), **TCP+UDP 7946** (node discovery), and **UDP 4789** (VXLAN data).
 
 ### Demonstration
 
@@ -548,16 +548,16 @@ font-family: Tahoma, Verdana, Arial, sans-serif; }
 ### What the output proves
 
 - **Scope is the key difference.** `docker network ls` shows `bridge` networks with scope **`local`** and overlay networks with scope **`swarm`**. A local network is meaningful only on one host; a swarm-scoped one spans the whole cluster.
-- **`ingress`** was created automatically by `docker swarm init` — it is the overlay network backing swarm's load-balancing routing mesh.
+- **`ingress`** was created automatically by `docker swarm init` - it is the overlay network backing swarm's load-balancing routing mesh.
 - Containers on the overlay get an address in the swarm-wide **10.0.1.0/24** subnet, on an interface with **MTU 1450** (the VXLAN overhead).
 - Each container has **two** interfaces: `eth0` on the overlay (10.0.1.x) for cluster traffic and `eth1` on `docker_gwbridge` (172.22.0.x) for outbound traffic to the internet.
-- **Service discovery works**: `nslookup web` from a container resolves to the **virtual IP 10.0.1.7**, and `wget -qO- http://web` returns Nginx's page. The client addresses the service *by name* and swarm load-balances across all three replicas — the mechanism that makes multi-host networking transparent to application code.
+- **Service discovery works**: `nslookup web` from a container resolves to the **virtual IP 10.0.1.7**, and `wget -qO- http://web` returns Nginx's page. The client addresses the service *by name* and swarm load-balances across all three replicas - the mechanism that makes multi-host networking transparent to application code.
 
 ### One environment limitation, and what it shows
 
-Publishing a port through swarm's **ingress routing mesh** (`docker service create -p 8095:80`) did not work on this machine: the service tasks started and then exited immediately. The routing mesh relies on iptables/IPVS load-balancing features that the WSL2 kernel does not fully provide — the daemon log shows `Deleting nftables IPv4 rules error="exit status 1"`.
+Publishing a port through swarm's **ingress routing mesh** (`docker service create -p 8095:80`) did not work on this machine: the service tasks started and then exited immediately. The routing mesh relies on iptables/IPVS load-balancing features that the WSL2 kernel does not fully provide - the daemon log shows `Deleting nftables IPv4 rules error="exit status 1"`.
 
-Recreating the same service **without** a published port worked correctly, which isolates the fault precisely: the **overlay network itself is fine** — containers get overlay IPs, resolve each other by name and exchange traffic — and only the *ingress port-publishing layer* is unavailable. On a normal Linux host, or a real multi-node swarm, the published-port form works as documented.
+Recreating the same service **without** a published port worked correctly, which isolates the fault precisely: the **overlay network itself is fine** - containers get overlay IPs, resolve each other by name and exchange traffic - and only the *ingress port-publishing layer* is unavailable. On a normal Linux host, or a real multi-node swarm, the published-port form works as documented.
 
 ### Bridge vs overlay
 

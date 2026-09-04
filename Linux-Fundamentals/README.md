@@ -4,7 +4,7 @@ All commands below were executed on **Ubuntu 26.04 LTS** (WSL2, kernel 6.18.33.2
 
 ---
 
-## Task 1 — Soft Link vs Hard Link
+## Task 1 - Soft Link vs Hard Link
 
 ### The concept
 
@@ -14,7 +14,7 @@ A file's actual data lives in an **inode**. A filename is just a directory entry
 |---|---|---|
 | What it points to | The **inode** directly | The **pathname** of another file |
 | Inode number | **Same** as the original | **Its own**, different inode |
-| Survives deleting the original? | **Yes** — data lives until the last link goes | **No** — becomes a dangling link |
+| Survives deleting the original? | **Yes** - data lives until the last link goes | **No** - becomes a dangling link |
 | Can cross filesystems? | No | Yes |
 | Can link a directory? | No | Yes |
 | Size | Same as the file | Just the length of the stored path |
@@ -22,8 +22,8 @@ A file's actual data lives in an **inode**. A filename is just a directory entry
 ### Commands
 
 ```bash
-ln original.txt hardlink.txt       # hard link — no flag
-ln -s original.txt softlink.txt    # soft link — the -s flag
+ln original.txt hardlink.txt       # hard link - no flag
+ln -s original.txt softlink.txt    # soft link - the -s flag
 ls -li                             # -i shows the inode number
 rm softlink.txt                    # deleting a link never touches the original file
 ```
@@ -75,17 +75,17 @@ ln: /etc: hard link not allowed for directory
 ### What the output proves
 
 1. `hardlink.txt` and `original.txt` share inode **2378**; `softlink.txt` has its own inode **14204**.
-2. The link count on the original is **2** — two names point at one inode.
+2. The link count on the original is **2** - two names point at one inode.
 3. After `rm original.txt`, the **hard link still prints the content** (the inode still has a name referring to it, so the data was never freed), while the **soft link breaks** with `No such file or directory` because the path it stored no longer exists.
 4. `ln -s /etc etc-shortcut` succeeds, but `ln /etc etc-hard` fails with `hard link not allowed for directory`.
 
 ### Interview answer
 
-> A hard link is a second name for the same inode, so the file's data survives until every hard link is deleted, and all links are equal — there is no "original". A soft link is a small separate file that stores a *path*; if that path disappears the link dangles. Hard links cannot cross filesystem boundaries or point at directories, because inode numbers are only unique within a single filesystem and directory hard links would allow loops in the tree. Soft links can do both, which is why symlinks are what you normally see in `/usr/bin` and in versioned shared libraries.
+> A hard link is a second name for the same inode, so the file's data survives until every hard link is deleted, and all links are equal - there is no "original". A soft link is a small separate file that stores a *path*; if that path disappears the link dangles. Hard links cannot cross filesystem boundaries or point at directories, because inode numbers are only unique within a single filesystem and directory hard links would allow loops in the tree. Soft links can do both, which is why symlinks are what you normally see in `/usr/bin` and in versioned shared libraries.
 
 ---
 
-## Task 2 — `adduser` vs `useradd`
+## Task 2 - `adduser` vs `useradd`
 
 ### The difference
 
@@ -99,7 +99,7 @@ ln: /etc: hard link not allowed for directory
 | Group | Creates a matching user group | Only with the right options |
 | Shell | `/bin/bash` | `/bin/sh` or `nologin` |
 
-**Preferred on Ubuntu: `adduser`** — it is the officially recommended, policy-compliant front-end. It applies the distribution's defaults from `/etc/adduser.conf`, so one step produces a usable account (home directory, group, shell, password) instead of a string of flags you have to remember. `useradd` is the right choice in **scripts and automation**, where predictable non-interactive behaviour matters more than convenience.
+**Preferred on Ubuntu: `adduser`** - it is the officially recommended, policy-compliant front-end. It applies the distribution's defaults from `/etc/adduser.conf`, so one step produces a usable account (home directory, group, shell, password) instead of a string of flags you have to remember. `useradd` is the right choice in **scripts and automation**, where predictable non-interactive behaviour matters more than convenience.
 
 ### Commands
 
@@ -160,17 +160,17 @@ uid=1001(testuser) gid=1001(testuser) groups=1001(testuser),100(users)
 
 ### What the output proves
 
-- `file` shows `adduser` is a **Perl script** and `useradd` is an **ELF binary** — the wrapper/underlying-tool relationship in a single command.
+- `file` shows `adduser` is a **Perl script** and `useradd` is an **ELF binary** - the wrapper/underlying-tool relationship in a single command.
 - `adduser` produced a complete account: a home directory populated from `/etc/skel` (`.bashrc`, `.profile`, `.bash_logout`), a matching `testuser` group, and `/bin/bash` as the login shell.
 - Bare `useradd` created the `/etc/passwd` entry but **no home directory at all**, and gave the user `/bin/sh`.
 
 ---
 
-## Task 3 — `journalctl`
+## Task 3 - `journalctl`
 
 ### What it is
 
-`journalctl` is the query tool for the **systemd journal**. Instead of plain-text files scattered through `/var/log`, systemd writes a single structured, indexed **binary** log capturing kernel messages, service stdout/stderr and syslog in one place — so it can be filtered by service, priority, time or boot without any `grep` gymnastics.
+`journalctl` is the query tool for the **systemd journal**. Instead of plain-text files scattered through `/var/log`, systemd writes a single structured, indexed **binary** log capturing kernel messages, service stdout/stderr and syslog in one place - so it can be filtered by service, priority, time or boot without any `grep` gymnastics.
 
 ### Key commands
 
@@ -303,7 +303,7 @@ Sep 03 18:21:17 Vlair-Lavya systemd-journald[45]: File /var/log/journal/9a82298f
 
 ---
 
-## Task 4 — Linux Command Cheat Sheet
+## Task 4 - Linux Command Cheat Sheet
 
 ### Reference
 

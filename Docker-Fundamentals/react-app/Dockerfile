@@ -11,7 +11,7 @@ COPY vite.config.js index.html ./
 COPY src ./src
 RUN npm run build
 
-# Stage 2: serve the built assets with Nginx — no Node in the final image
+# Stage 2: serve the built assets with Nginx - no Node in the final image
 FROM nginx:1.27-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 
