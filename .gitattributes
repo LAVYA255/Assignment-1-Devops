@@ -1,0 +1,8 @@
+# Shell scripts and Dockerfiles must keep LF endings so they run on Linux
+*.sh        text eol=lf
+Dockerfile* text eol=lf
+*.go        text eol=lf
+*.py        text eol=lf
+
+# Screenshots are binary
+*.png binary

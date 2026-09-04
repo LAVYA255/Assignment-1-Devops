@@ -1,0 +1,10 @@
+# Single-stage equivalent, kept ONLY to demonstrate the size difference.
+# The whole Go toolchain and the source stay in the shipped image.
+FROM golang:1.23-alpine
+
+WORKDIR /src
+COPY go.mod main.go ./
+RUN CGO_ENABLED=0 go build -o /app/server main.go
+
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
