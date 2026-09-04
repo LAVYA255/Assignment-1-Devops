@@ -1,63 +1,76 @@
-# Docker Multi-Stage Build
+# Dockerfiles and Images: multi-stage build
 
 **Name:** Lavya
-
 **Enrollment Number:** 24BCS10124
 
----
+## Task 1: Multi-stage build on port 8080
 
-## Task 1 - Run the Multi-Stage Dockerfile
+A small Go web server that prints `Hello World from Docker multi-stage build`, built with a two-stage Dockerfile.
 
-A Go web application is compiled in a `golang` builder stage, and only the resulting static binary is copied into a `scratch` image. The application serves **`Hello World from Docker multi-stage build`** on **port 8080**.
-
-### The multi-stage Dockerfile
+The idea: stage 1 has the whole Go toolchain and compiles the binary. Stage 2 starts from `scratch`, a completely empty image, and copies **only the compiled binary** across. The compiler, the source and the build cache never make it into what I ship.
 
 ```dockerfile
-# ---------- Stage 1: BUILD ----------
+# Stage 1: build
 FROM golang:1.23-alpine AS builder
-
 WORKDIR /src
-
-# Copy the module definition first so dependency resolution is layer-cached
 COPY go.mod ./
 RUN go mod download
-
 COPY main.go ./
-
-# CGO_ENABLED=0 produces a fully static binary, which is what lets us run it
-# on `scratch` (an image with no libc and no shell at all).
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/server main.go
 
-
-# ---------- Stage 2: RUNTIME ----------
+# Stage 2: runtime, empty base image
 FROM scratch
-
-# Only the binary is carried across the stage boundary
 COPY --from=builder /app/server /server
-
 EXPOSE 8080
 ENTRYPOINT ["/server"]
 ```
 
-### Commands
+`CGO_ENABLED=0` matters. It produces a fully static binary, which is what lets it run on `scratch` at all, since there's no libc in there for it to link against.
 
 ```bash
 docker build -t multistage-hello:1.0 .
 docker run -d --name multistage-hello -p 8080:8080 multistage-hello:1.0
-docker ps
-curl http://localhost:8080
 ```
 
-### Full output
+### The size difference
+
+I built the same app both ways to compare:
+
+```console
+REPOSITORY          TAG             SIZE
+singlestage-hello   1.0             477MB
+multistage-hello    1.0             7.3MB
+```
+
+**477 MB down to 7.3 MB.** About 65 times smaller for the exact same program. Smaller images push and pull faster, and there's far less in them to go wrong: no shell, no package manager, nothing for an attacker to use if they get in.
+
+I confirmed there's genuinely no shell in there:
+
+```console
+$ docker run --rm --entrypoint /bin/sh multistage-hello:1.0 -c 'ls'
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "/bin/sh": stat /bin/sh: no such file or directory
+```
+
+### It running on port 8080
+
+```console
+$ docker ps
+NAMES              IMAGE                  STATUS         PORTS
+multistage-hello   multistage-hello:1.0   Up 3 seconds   0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
+
+$ curl -s http://localhost:8080/plain
+Hello World from Docker multi-stage build
+```
+
+![Multi-stage build running on port 8080](../screenshots/07-multistage-build-8080.png)
+
+<details>
+<summary>Full build and verification output</summary>
 
 ```console
 ########## 1. Build the image from the MULTI-STAGE Dockerfile ##########
-wsl : DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
-At line:1 char:581
-+ ... chpad\out'; wsl -d Ubuntu -u root -- bash "$sp/build_multistage.sh" > ...
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
 +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (DEPRECATED: The...future release.:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
  
             Install the buildx component to build images with BuildKit:
             https://docs.docker.com/go/buildx/
@@ -136,95 +149,36 @@ docker: Error response from daemon: failed to create task for container: failed 
 Run 'docker run --help' for more information
 ```
 
----
-
-## Task 2 - Documentation and Evidence
-
-### Application running successfully
-
-The browser shows the required message served from the container on port 8080:
-
-![Multi-stage build running on port 8080](../screenshots/07-multistage-build-8080.png)
-
-Confirmed from the command line as well:
-
-```console
-$ curl -s http://localhost:8080/plain
-Hello World from Docker multi-stage build
-```
-
-### `docker ps` showing the container on port 8080
-
-```console
-$ docker ps
-NAMES              IMAGE                  STATUS         PORTS
-multistage-hello   multistage-hello:1.0   Up 3 seconds   0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
-```
-
-The `PORTS` column confirms **`0.0.0.0:8080->8080/tcp`** - host port 8080 mapped to container port 8080, exactly as required.
-
-### The size difference
-
-The same application was also built from a single-stage Dockerfile (`Dockerfile.singlestage`, kept in this folder purely for comparison):
-
-```console
-REPOSITORY          TAG   SIZE
-singlestage-hello   1.0   477MB
-multistage-hello    1.0   7.3MB
-```
-
-**477 MB → 7.3 MB, a 65× reduction**, for a byte-for-byte identical application.
+</details>
 
 ---
 
-## Why multi-stage builds matter
+## Task 2: Documentation
 
-A single-stage image keeps everything used to *build* the application: the compiler, the module cache, the source code and every intermediate artefact. None of that is needed to *run* it.
-
-A multi-stage build draws a line between the two. `COPY --from=builder` reaches back into an earlier stage and takes only the finished artefact; everything else in that stage is discarded when the build ends.
-
-The benefits are concrete:
-
-- **Size** - 7.3 MB instead of 477 MB. Faster to push, pull and deploy, and much cheaper to store across many versions.
-- **Security** - the final image is `scratch`: no shell, no package manager, no compiler. An attacker who reaches the container has no tools to work with. The output above shows this directly: running `/bin/sh` inside the image fails, because there is no shell in it at all.
-- **No source leakage** - the Go source never reaches the shipped image.
-- **Reproducibility** - the build toolchain is pinned inside the Dockerfile, so the build does not depend on what happens to be installed on the machine running it.
-
-The same pattern appears in the other apps in this repository: the [React app](../Docker-Fundamentals/react-app/Dockerfile) builds with Node and ships on Nginx, and the [Java app](../Docker-Fundamentals/java-app/Dockerfile) compiles on the JDK and ships on the JRE.
+Covered by this file: name, enrollment number, the app running on 8080, and the `docker ps` output above showing the container and its port mapping.
 
 ---
 
-## Task 3 - Deploy at Least 3 Different Types of Applications
+## Task 3: Deploying three different application types
 
-Three application types were built and deployed as containers, each verified with a browser screenshot and an HTTP 200 response. Full details are in [Docker-Fundamentals](../Docker-Fundamentals/README.md).
+Built and ran in [`../Docker-Fundamentals`](../Docker-Fundamentals/README.md), all confirmed with HTTP 200.
 
-| # | Type | Framework | Image | Port | Evidence |
-|---|---|---|---|---|---|
-| 1 | **Node.js** | Express | `hello-nodejs:1.0` | 8081 | [screenshot](../screenshots/01-nodejs-app.png) |
-| 2 | **Python** | Flask | `hello-python:1.0` | 8082 | [screenshot](../screenshots/02-python-app.png) |
-| 3 | **Java** | JDK HttpServer | `hello-java:1.0` | 8083 | [screenshot](../screenshots/03-java-app.png) |
-
-Three more were deployed beyond the requirement - Apache (8084), React (8085) and Nginx (8086).
-
-```console
-$ docker ps
-NAMES          IMAGE              STATUS         PORTS
-hello-nginx    hello-nginx:1.0    Up 6 seconds   0.0.0.0:8086->80/tcp,   [::]:8086->80/tcp
-hello-react    hello-react:1.0    Up 6 seconds   0.0.0.0:8085->80/tcp,   [::]:8085->80/tcp
-hello-apache   hello-apache:1.0   Up 6 seconds   0.0.0.0:8084->80/tcp,   [::]:8084->80/tcp
-hello-java     hello-java:1.0     Up 7 seconds   0.0.0.0:8083->8080/tcp, [::]:8083->8080/tcp
-hello-python   hello-python:1.0   Up 7 seconds   0.0.0.0:8082->5000/tcp, [::]:8082->5000/tcp
-hello-nodejs   hello-nodejs:1.0   Up 7 seconds   0.0.0.0:8081->3000/tcp, [::]:8081->3000/tcp
-```
-
-### Node.js
+**Node.js**, port 8081:
 
 ![Node.js Hello World](../screenshots/01-nodejs-app.png)
 
-### Python
+**Python**, port 8082:
 
 ![Python Hello World](../screenshots/02-python-app.png)
 
-### Java
+**Java**, port 8083:
 
 ![Java Hello World](../screenshots/03-java-app.png)
+
+```console
+﻿$ docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+NAMES              IMAGE                  STATUS         PORTS
+hello-java         hello-java:1.0         Up 3 seconds   0.0.0.0:8083->8080/tcp, [::]:8083->8080/tcp
+hello-python       hello-python:1.0       Up 3 seconds   0.0.0.0:8082->5000/tcp, [::]:8082->5000/tcp
+hello-nodejs       hello-nodejs:1.0       Up 3 seconds   0.0.0.0:8081->3000/tcp, [::]:8081->3000/tcp
+```

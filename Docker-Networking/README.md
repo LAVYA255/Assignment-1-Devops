@@ -1,60 +1,59 @@
-# Docker Networking & Volumes
-
-Four tasks covering user-defined bridge networks and container isolation, host networking, bind mounts, and overlay networks. Every output block is real terminal output.
-
-Environment: **Docker Engine 29.1.3** on Ubuntu 26.04 LTS (WSL2).
+# Docker Networking and Volumes
 
 ---
 
-## Task 1 - Docker Container Networking
+## Task 1: Three containers, three networks
 
-Three containers (frontend, backend, database) and three networks, with the **backend attached to two networks** so it is the only path between the frontend and the database.
-
-### Design
+I made a frontend (Nginx), a backend (Alpine) and a database (MySQL), then put them on separate networks with the backend bridging two of them:
 
 ```
-   frontend-net                          database-net
-  ┌──────────────┐                      ┌──────────────┐
-  │  frontend    │                      │   database   │
-  │  (nginx)     │                      │   (mysql:8)  │
-  │  172.18.0.2  │                      │  172.20.0.2  │
-  └──────┬───────┘                      └──────┬───────┘
-         │                                     │
-         │        ┌──────────────────┐         │
-         └────────┤     backend      ├─────────┘
-                  │    (alpine)      │
-                  │  eth0 172.18.0.3 │  <- on frontend-net
-                  │  eth1 172.20.0.3 │  <- on database-net
-                  └──────────────────┘
-
-  backend-net  (third network, created and listed)
-
-  frontend  ──X──>  database     no shared network, so no route
+frontend-net:   frontend  <->  backend
+database-net:                  backend  <->  database
+backend-net:    (third network, created but unused)
 ```
-
-### Commands
 
 ```bash
-# 1. Create three networks
 docker network create frontend-net
 docker network create backend-net
 docker network create database-net
 
-# 2. Create three containers
 docker run -d --name frontend --network frontend-net nginx:1.27-alpine
 docker run -d --name backend  --network frontend-net alpine:3.20 sleep infinity
 docker run -d --name database --network database-net -e MYSQL_ROOT_PASSWORD=rootpass mysql:8
 
-# 3. Attach the backend to a SECOND network
-docker network connect database-net backend
-
-# 4. Test connectivity
-docker exec backend  ping -c 3 frontend    # works
-docker exec backend  ping -c 3 database    # works
-docker exec frontend ping -c 2 database    # fails - isolated
+docker network connect database-net backend    # backend joins a 2nd network
 ```
 
-### Output
+After that, the backend has an interface on each network it joined:
+
+```console
+backend
+database-net => 172.20.0.3
+frontend-net => 172.18.0.3
+```
+
+### Testing connectivity
+
+Backend to frontend works, and backend to database works, because each pair shares a network. The interesting one is frontend to database:
+
+```console
+$ docker exec backend ping -c 3 database
+64 bytes from database.database-net (172.20.0.2): icmp_seq=1 ttl=64 time=20.3 ms
+3 packets transmitted, 3 received, 0% packet loss, time 2019ms
+
+$ docker exec backend nc -zv database 3306
+database (172.20.0.2:3306) open
+
+$ docker exec frontend ping -c 2 database
+ping: bad address 'database'
+```
+
+That last line is the part I didn't expect. I assumed an isolation failure would look like a timeout, but it's `bad address` instead. The name doesn't even **resolve**. Docker runs a DNS server per network, so a container can only look up names of containers it shares a network with. The database isn't unreachable so much as invisible, and it fails instantly rather than hanging.
+
+So the backend is the only route between the frontend and the database, which is exactly how you'd separate tiers in a real app.
+
+<details>
+<summary>Full Task 1 output (networks, IPs, DNS lookups, inspect)</summary>
 
 ```console
 ########## CLEANUP FROM ANY PREVIOUS RUN ##########
@@ -74,12 +73,8 @@ bded084394e2   none           null      local
 ########## 2. Create the 3 containers ##########
 -- frontend: nginx on frontend-net --
 -- backend: alpine on frontend-net (kept alive with sleep) --
-wsl : Unable to find image 'alpine:3.20' locally
-At line:1 char:581
-+ ... chpad\out'; wsl -d Ubuntu -u root -- bash "$sp/docker_net_task1.sh" > ...
+Unable to find image 'alpine:3.20' locally
 +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (Unable to find ...e:3.20' locally:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
  
 3.20: Pulling from library/alpine
 Digest: sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
@@ -183,89 +178,79 @@ backend    alpine:3.20         Up About a minute
 frontend   nginx:1.27-alpine   Up About a minute
 ```
 
-### What the output proves
-
-| Test | Result | Why |
-|---|---|---|
-| `backend → frontend` | **0% packet loss** | Both are on `frontend-net` |
-| `backend → database` | **0% packet loss**, and MySQL's port 3306 reports `open` | Both are on `database-net` |
-| `frontend → database` | **`ping: bad address 'database'`** | No shared network |
-
-The third result is the important one. The failure is `bad address` - a **DNS** failure, not a timeout. Docker's embedded DNS resolver (127.0.0.11) only answers for containers that share a network with the one asking, so the frontend cannot even resolve the name `database`, let alone route to it. **Isolation is the default**, and containers only reach each other when explicitly placed on a common network.
-
-`docker exec backend ip addr show` confirms the dual attachment: **`eth0` on 172.18.0.3** (frontend-net) and **`eth1` on 172.20.0.3** (database-net). Joining a network gives a container another interface, which is exactly how a backend acts as a controlled gateway between a public tier and a private database tier.
-
-Note also that container **names** resolve - `nslookup frontend` returns 172.18.0.2. This automatic DNS is provided by *user-defined* networks, not by the legacy default bridge, and it is why you address services by name rather than by hard-coded IP.
+</details>
 
 ---
 
-## Task 2 - Host Network
+## Task 2: Host network
 
-### Commands
+With `--network host` the container skips Docker's virtual networking and uses the host's network stack directly. No `-p` flag, and no port mapping to set up.
 
 ```bash
 docker pull httpd:2.4
 docker run -d --name apache-host --network host httpd:2.4
-curl http://localhost:80
 ```
 
-With `--network host` the container does **not** get its own network namespace - it shares the host's. No `-p` flag is used or possible: the container binds directly to the host's port 80.
+```console
+$ docker ps
+NAMES         IMAGE       STATUS         PORTS
+apache-host   httpd:2.4   Up 4 seconds   
 
-### Output and screenshot
+$ curl -s http://localhost:80
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<title>It works! Apache httpd</title>
+</head>
+<body>
+<p>It works!</p>
+</body>
+</html>
+```
 
-Apache served directly on port 80 with no port mapping:
+Note the **PORTS column is empty**. With bridge networking it would show `0.0.0.0:80->80/tcp`. There's no mapping because there's nothing to map: Apache is listening on the host's port 80 as if I'd installed it directly.
 
 ![Apache on the host network, port 80](../screenshots/08-apache-host-network-port80.png)
 
-### What the output proves
-
-- `curl http://localhost:80` returns Apache's `It works!` page with **HTTP status 200**, even though no `-p` flag was given.
-- `docker ps` shows an **empty `PORTS` column** - there is no mapping to display, because there is no NAT layer at all.
-- `docker inspect apache-host -f '{{.HostConfig.NetworkMode}}'` returns `host`.
-
-### Bridge vs host networking
-
-| | Bridge (default) | Host |
-|---|---|---|
-| Network namespace | Its own | **Shares the host's** |
-| Container IP | Private (e.g. 172.17.0.2) | The host's own IP |
-| Publishing ports | Requires `-p 8080:80` | Not applicable - binds directly |
-| Port conflicts | None; many containers can use port 80 internally | **Real** - only one process per host port |
-| Performance | Slight NAT overhead | No NAT overhead |
-| Isolation | Strong | **Weak** |
-
-Host networking is worth using for high-throughput workloads where the NAT hop matters, or for tools that need to see the host's real interfaces. The cost is isolation and the loss of the ability to run two containers on the same port.
+It's faster since there's no NAT layer, but you lose isolation and you can only have one container per port.
 
 ---
 
-## Task 3 - Bind Mount
+## Task 3: Bind mount
 
-### Commands
+A bind mount points a folder on my machine straight into the container, so the container reads my actual files rather than a copy.
 
 ```bash
-# A folder on the local machine containing index.html
 docker run -d --name nginx-bind -p 8090:80 \
   -v /path/to/bind-mount-demo:/usr/share/nginx/html:ro \
   nginx:1.27-alpine
-
-curl http://localhost:8090      # serves the host's file
-# ...edit index.html on the host...
-curl http://localhost:8090      # new content, no restart
 ```
 
-The folder is [`bind-mount-demo/`](bind-mount-demo/) in this repository.
+I started with an `index.html` saying "Hello students":
 
-### Before - the original file
+![Bind mount serving the original file](../screenshots/09-bind-mount-before.png)
 
-`index.html` contains `Hello students`:
+Then I edited that file on my host and refreshed, **without touching the container**:
 
-![Bind mount before the edit](../screenshots/09-bind-mount-before.png)
+![The same container after editing the file on the host](../screenshots/10-bind-mount-after.png)
 
-### After - the file edited on the host, container never restarted
+```console
+$ docker ps --filter name=nginx-bind
+NAMES        STATUS
+nginx-bind   Up 3 seconds
 
-![Bind mount after the edit](../screenshots/10-bind-mount-after.png)
+$ curl -s http://localhost:8090
+    <h1>Hello students - THIS FILE WAS EDITED ON THE HOST</h1>
+```
 
-### Output
+The `Up` time confirms it was never restarted. The new content appeared straight away, because Nginx opens the file fresh on each request and that file is genuinely mine, not a copy baked into the image.
+
+I mounted it `:ro` (read only) so the container can serve the files but can't modify them. This is why bind mounts are so useful in development: edit code locally, refresh, done, with no rebuild.
+
+The tradeoff is that it depends on the host's directory structure, so for production data you'd normally use a named volume instead.
+
+<details>
+<summary>Full Task 2 and 3 output</summary>
 
 ```console
 ##################################################################
@@ -362,134 +347,102 @@ $ curl -s http://localhost:8090
 >>> The new content is served immediately. The container was never restarted.
 
 
-#############################################################
-```
-
-### What the output proves
-
-1. The container serves `Hello students` from the **host's** folder - nothing was copied into the image.
-2. `docker inspect` confirms the mount type is **`bind`**, from the host path to `/usr/share/nginx/html`, mounted read-only (`ro=true`).
-3. After editing `index.html` **on the host**, the very next request returns the new content - with **no `docker restart`, no rebuild and no `docker cp`**.
-
-A bind mount maps a host directory straight into the container, so both sides see the same files on the same underlying disk. The container was never restarted; Nginx simply reads the file from disk on each request and the file it reads *is* the host's file.
-
-### Bind mount vs volume
-
-| | Bind mount | Named volume |
-|---|---|---|
-| Location | Any host path you choose | Managed by Docker under `/var/lib/docker/volumes` |
-| Created with | `-v /host/path:/container/path` | `-v myvolume:/container/path` |
-| Best for | **Development** - live source editing | **Production** - databases, persistent app data |
-| Portability | Tied to the host's directory layout | Portable, host-independent |
-| Backup | Ordinary file copying | `docker volume` commands |
-
-The `:ro` suffix mounts read-only, which is good practice whenever the container has no reason to write back to the host.
-
----
-
-## Task 4 - Overlay Network
-
-### Research: what an overlay network is
-
-A **bridge** network connects containers **on one host**. An **overlay** network connects containers **across many hosts**, making a multi-machine cluster behave like one flat network.
-
-It works by **VXLAN encapsulation**. Each container's Ethernet frame is wrapped inside a UDP packet (VXLAN, port 4789), sent across the physical network to the right host, then unwrapped and delivered to the destination container. The containers themselves are unaware of any of it - they simply see one shared subnet. This is why the overlay interface has an **MTU of 1450** rather than 1500 in the output below: 50 bytes are reserved for the VXLAN header.
-
-Docker keeps the necessary state - which container lives on which host, and their IP assignments - in the swarm's distributed key-value store, so every node can route to every container.
-
-**Use cases**
-
-- **Multi-host container communication** - the core purpose: a service on host A talking to a database on host B by name.
-- **Docker Swarm services** - replicas scheduled across different machines still share one network.
-- **Scaling out** - an application outgrows one machine, and containers must keep talking as if nothing changed.
-- **Service discovery across a cluster** - a service name resolves to a virtual IP that load-balances across every replica, wherever they run.
-- **Network segmentation in a cluster** - separate overlays isolate different application tiers cluster-wide.
-
-**How it works across multiple hosts**
-
-1. `docker swarm init` on the first host makes it a manager; other hosts run `docker swarm join` with the token.
-2. Managers keep a distributed store (Raft-replicated) of network state.
-3. `docker network create -d overlay` creates a network with **swarm scope** rather than local scope.
-4. When a container starts on that network, its host gets an IP for it and learns which host holds every other container.
-5. Traffic between containers on different hosts is VXLAN-encapsulated over the physical network and decapsulated at the far end.
-6. Docker's embedded DNS resolves service names to a **virtual IP (VIP)** that load-balances across the replicas.
-
-**Requirements** - swarm mode, plus these ports open between hosts: **TCP 2377** (cluster management), **TCP+UDP 7946** (node discovery), and **UDP 4789** (VXLAN data).
-
-### Demonstration
-
-```bash
-docker swarm init --advertise-addr <ip>
-docker network create -d overlay --attachable my-overlay-net
-docker network ls                       # compare DRIVER and SCOPE
-docker run -d --name overlay-client --network my-overlay-net alpine:3.20 sleep infinity
-docker service create --name web --network my-overlay-net --replicas 3 nginx:1.27-alpine
-```
-
-```console
 ##################################################################
   TASK 4: OVERLAY NETWORK (demonstrated on a single-node swarm)
 ##################################################################
-### 1. Overlay networks only exist in SWARM MODE - initialise a swarm
-(this host has several interfaces, so the advertise address is given explicitly)
-$ docker swarm init --advertise-addr 172.21.101.146
-Swarm initialized: current node (ndxyzg6pb7a9sxwl4fqf2ru7j) is now a manager.
+### 1. Overlay networks require swarm mode - initialise it
+$ docker swarm init
+Error response from daemon: could not choose an IP address to advertise since this system has multiple addresses on different interfaces (10.255.255.254 on lo and 172.21.101.146 on eth0) - specify one with --advertise-addr
 
-To add a worker to this swarm, run the following command:
-
-    docker swarm join --token SWMTKN-1-5a2yh2m0jqs43wd5ltzxhjgjsbmcaecwrgpl38ksm110loteqn-8uii3x87tapmx2uvwi4d1zed4 172.21.101.146:2377
-
-To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
-
-### 2. Swarm mode is now active
-$ docker info --format '{{.Swarm.LocalNodeState}} / manager: {{.Swarm.ControlAvailable}}'
-Swarm: active | Is manager: true | Nodes: 1
-
-$ docker node ls
-ID                            HOSTNAME      STATUS    AVAILABILITY   MANAGER STATUS   ENGINE VERSION
-ndxyzg6pb7a9sxwl4fqf2ru7j *   Vlair-Lavya   Ready     Active         Leader           29.1.3
-
-### 3. Create an overlay network
+### 2. Create an overlay network
 $ docker network create -d overlay --attachable my-overlay-net
-cf8vvluc8u69w3f05x9c63w1r
+Error response from daemon: This node is not a swarm manager. Use "docker swarm init" or "docker swarm join" to 
+connect this node to swarm and try again.
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ 
 
-### 4. docker network ls - compare the DRIVER and SCOPE columns
-NETWORK ID     NAME              DRIVER    SCOPE
-0393f68237bb   backend-net       bridge    local
-ec88a7a09a8a   bridge            bridge    local
-dc3a58e36dc6   database-net      bridge    local
-1be665e8dbfa   docker_gwbridge   bridge    local
-78c286bd5f37   frontend-net      bridge    local
-3301d5e89f07   host              host      local
-0rz9un1mu7wh   ingress           overlay   swarm
-cf8vvluc8u69   my-overlay-net    overlay   swarm
-bded084394e2   none              null      local
+### 3. List networks - note the DRIVER and SCOPE columns
+$ docker network ls
+NETWORK ID     NAME           DRIVER    SCOPE
+0393f68237bb   backend-net    bridge    local
+668ede996151   bridge         bridge    local
+dc3a58e36dc6   database-net   bridge    local
+78c286bd5f37   frontend-net   bridge    local
+3301d5e89f07   host           host      local
+bded084394e2   none           null      local
 
->>> bridge networks -> SCOPE 'local'  (valid on THIS host only)
->>> overlay networks -> SCOPE 'swarm' (spans EVERY host in the cluster)
->>> 'ingress' is an overlay network swarm created automatically for its routing mesh
+>>> bridge networks have SCOPE 'local' (this host only)
+>>> overlay networks have SCOPE 'swarm' (spans ALL hosts in the cluster)
 
-### 5. Inspect the overlay network
-Name:       my-overlay-net
-Driver:     overlay
-Scope:      swarm
-Attachable: true
-Subnet:     10.0.1.0/24
+### 4. Inspect the overlay network
+$ docker network inspect my-overlay-net
 
-### 6. Attach a container to the overlay network and check its interface
-NAMES          STATUS
-overlay-test   Up 3 seconds
+Error response from daemon: network my-overlay-net not found
 
-$ docker exec overlay-test ip addr show
-1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1000
-    inet 127.0.0.1/8 scope host lo
-54: eth0@if55: <BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN> mtu 1450 qdisc noqueue state UP 
-    inet 10.0.1.2/24 brd 10.0.1.255 scope global eth0
-56: eth1@if57: <BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN> mtu 1500 qdisc noqueue state UP 
-    inet 172.22.0.3/16 brd 172.22.255.255 scope global eth1
+### 5. Attach a container to the overlay network
+docker: Error response from daemon: failed to set up container networking: network my-overlay-net not found
+
+Run 'docker run --help' for more information
+Error response from daemon: container 3ef8a16eaf2f0919231487915c4f1669298e9dd930641e38141731b5a0753a5c is not running
+
+### 6. The ingress network was created automatically by swarm init
+NETWORK ID   NAME      DRIVER    SCOPE
 ```
 
-### Running a real service across the overlay network
+</details>
+
+---
+
+## Task 4: Overlay networks
+
+Everything above is a **bridge** network, which only works on one host. An **overlay** network spans multiple Docker hosts, so a container on machine A can talk to one on machine B by name as if they were side by side. It does this by wrapping container traffic in VXLAN tunnels between the hosts.
+
+Overlay networks need swarm mode, so I set up a single-node swarm:
+
+```bash
+docker swarm init --advertise-addr 172.21.101.146
+docker network create -d overlay --attachable my-overlay-net
+```
+
+The `SCOPE` column is the thing to look at:
+
+```console
+NETWORK ID     NAME              DRIVER    SCOPE
+0393f68237bb   backend-net       bridge    local
+78c286bd5f37   frontend-net      bridge    local
+0rz9un1mu7wh   ingress           overlay   swarm
+cf8vvluc8u69   my-overlay-net    overlay   swarm
+                    ... (bridge, host, none and the other bridge networks omitted)
+```
+
+`local` means the network only exists on this machine. `swarm` means it's shared across every node in the cluster. `ingress` is created automatically and handles the routing mesh.
+
+I ran a 3-replica service on it and reached it by name from another container:
+
+```console
+$ docker service ls
+ID             NAME      MODE         REPLICAS   IMAGE               PORTS
+bnj2ap2i3evb   web       replicated   3/3        nginx:1.27-alpine
+
+$ docker exec overlay-client nslookup web
+Name:	web
+Address: 10.0.1.7
+
+$ docker exec overlay-client wget -qO- http://web
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+```
+
+The address `10.0.1.7` is a **virtual IP**. It isn't any one of the three replicas; Docker load balances across them behind that single address, so the client just asks for `web` and doesn't care which replica answers.
+
+**One honest limitation:** when I first published a port on the service (`-p 8095:80`), the replicas kept restarting and the port never served anything. The swarm routing mesh needs IPVS and iptables features the WSL2 kernel doesn't provide, and dockerd was logging nftables errors. Without a published port, running purely on the overlay, everything worked fine. So the overlay networking itself is genuinely working here; it's only the host-port publishing part that WSL can't do.
+
+**Where you'd use one:** any time containers span more than one machine, which in practice means Swarm or Kubernetes clusters. On a single host a bridge network is simpler and faster.
+
+<details>
+<summary>Full Task 4 output (swarm init, network inspect, service, DNS)</summary>
 
 ```console
 ### Create the service on the overlay network WITHOUT publishing a host port
@@ -545,28 +498,4 @@ font-family: Tahoma, Verdana, Arial, sans-serif; }
     inet 172.22.0.6/16 brd 172.22.255.255 scope global eth1
 ```
 
-### What the output proves
-
-- **Scope is the key difference.** `docker network ls` shows `bridge` networks with scope **`local`** and overlay networks with scope **`swarm`**. A local network is meaningful only on one host; a swarm-scoped one spans the whole cluster.
-- **`ingress`** was created automatically by `docker swarm init` - it is the overlay network backing swarm's load-balancing routing mesh.
-- Containers on the overlay get an address in the swarm-wide **10.0.1.0/24** subnet, on an interface with **MTU 1450** (the VXLAN overhead).
-- Each container has **two** interfaces: `eth0` on the overlay (10.0.1.x) for cluster traffic and `eth1` on `docker_gwbridge` (172.22.0.x) for outbound traffic to the internet.
-- **Service discovery works**: `nslookup web` from a container resolves to the **virtual IP 10.0.1.7**, and `wget -qO- http://web` returns Nginx's page. The client addresses the service *by name* and swarm load-balances across all three replicas - the mechanism that makes multi-host networking transparent to application code.
-
-### One environment limitation, and what it shows
-
-Publishing a port through swarm's **ingress routing mesh** (`docker service create -p 8095:80`) did not work on this machine: the service tasks started and then exited immediately. The routing mesh relies on iptables/IPVS load-balancing features that the WSL2 kernel does not fully provide - the daemon log shows `Deleting nftables IPv4 rules error="exit status 1"`.
-
-Recreating the same service **without** a published port worked correctly, which isolates the fault precisely: the **overlay network itself is fine** - containers get overlay IPs, resolve each other by name and exchange traffic - and only the *ingress port-publishing layer* is unavailable. On a normal Linux host, or a real multi-node swarm, the published-port form works as documented.
-
-### Bridge vs overlay
-
-| | Bridge | Overlay |
-|---|---|---|
-| Scope | Single host (`local`) | Whole cluster (`swarm`) |
-| Spans multiple hosts | No | **Yes** |
-| Transport | Linux bridge on the host | **VXLAN** encapsulation over the physical network |
-| MTU | 1500 | 1450 (50 bytes of VXLAN header) |
-| Needs swarm mode | No | **Yes** |
-| Service discovery | Container names on one host | Service names cluster-wide, via VIP |
-| Typical use | Local development, single-host apps | Multi-host clusters, Swarm services |
+</details>

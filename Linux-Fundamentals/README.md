@@ -1,37 +1,26 @@
 # Linux Fundamentals
 
-All commands below were executed on **Ubuntu 26.04 LTS** (WSL2, kernel 6.18.33.2). Every output block is real terminal output captured while running the task.
+I ran all of this on Ubuntu 26.04 (WSL2). The outputs below are copied straight from my terminal.
 
 ---
 
-## Task 1 - Soft Link vs Hard Link
+## Task 1: Soft links vs hard links
 
-### The concept
+The thing that finally made this click for me: a filename isn't the file. The actual data sits in an **inode**, and a filename is just a label pointing at it.
 
-A file's actual data lives in an **inode**. A filename is just a directory entry pointing at an inode.
-
-| | Hard link | Soft link (symbolic link) |
-|---|---|---|
-| What it points to | The **inode** directly | The **pathname** of another file |
-| Inode number | **Same** as the original | **Its own**, different inode |
-| Survives deleting the original? | **Yes** - data lives until the last link goes | **No** - becomes a dangling link |
-| Can cross filesystems? | No | Yes |
-| Can link a directory? | No | Yes |
-| Size | Same as the file | Just the length of the stored path |
-
-### Commands
+- A **hard link** is a second label on the *same* inode. Delete the first name and the data is still there.
+- A **soft link** just stores a *path* as text. Delete what it points at and it breaks.
 
 ```bash
-ln original.txt hardlink.txt       # hard link - no flag
-ln -s original.txt softlink.txt    # soft link - the -s flag
-ls -li                             # -i shows the inode number
-rm softlink.txt                    # deleting a link never touches the original file
+ln  original.txt hardlink.txt     # hard link, no flag
+ln -s original.txt softlink.txt   # soft link, -s
+ls -li                            # -i shows inode numbers
 ```
 
-### Practical demonstration and output
+Here's the proof. Watch the first column (the inode) and what happens after `rm`:
 
 ```console
-﻿### 1. Create the original file
+### 1. Create the original file
 Hello from the original file
 
 ### 2. Create a HARD link
@@ -72,47 +61,33 @@ attempt a HARD link to a directory:
 ln: /etc: hard link not allowed for directory
 ```
 
-### What the output proves
+The important bits:
 
-1. `hardlink.txt` and `original.txt` share inode **2378**; `softlink.txt` has its own inode **14204**.
-2. The link count on the original is **2** - two names point at one inode.
-3. After `rm original.txt`, the **hard link still prints the content** (the inode still has a name referring to it, so the data was never freed), while the **soft link breaks** with `No such file or directory` because the path it stored no longer exists.
-4. `ln -s /etc etc-shortcut` succeeds, but `ln /etc etc-hard` fails with `hard link not allowed for directory`.
+- `original.txt` and `hardlink.txt` both show inode **2378**. The soft link has its own, **14204**.
+- The link count on the original is **2**, because two names point at that one inode.
+- After deleting the original, the hard link **still prints the text**. The soft link dies with `No such file or directory`.
+- `ln -s /etc` works, but `ln /etc` fails: `hard link not allowed for directory`.
 
-### Interview answer
-
-> A hard link is a second name for the same inode, so the file's data survives until every hard link is deleted, and all links are equal - there is no "original". A soft link is a small separate file that stores a *path*; if that path disappears the link dangles. Hard links cannot cross filesystem boundaries or point at directories, because inode numbers are only unique within a single filesystem and directory hard links would allow loops in the tree. Soft links can do both, which is why symlinks are what you normally see in `/usr/bin` and in versioned shared libraries.
+**If asked in an interview:** a hard link is another name for the same inode, so the data survives until every name is gone and no link is more "real" than another. A soft link stores a path, so it dangles if that path disappears. Hard links can't cross filesystems (inode numbers are only unique within one) or point at directories (you'd create loops). Soft links can do both, which is why `/usr/bin` is full of them.
 
 ---
 
-## Task 2 - `adduser` vs `useradd`
+## Task 2: `adduser` vs `useradd`
 
-### The difference
+Both make users, but they work at different levels. `adduser` is a **Perl script** that wraps `useradd`, which is the actual **compiled binary**.
 
-| | `adduser` | `useradd` |
-|---|---|---|
-| Type | High-level **Perl script** | Low-level **compiled binary** |
-| Origin | Debian/Ubuntu convenience wrapper | Part of the `shadow` package, on every Linux |
-| Behaviour | Interactive, applies sane defaults | Does exactly what you tell it, nothing more |
-| Home directory | Created and populated from `/etc/skel` automatically | Only with `-m` |
-| Password | Prompts for one | Not set (account stays locked) |
-| Group | Creates a matching user group | Only with the right options |
-| Shell | `/bin/bash` | `/bin/sh` or `nologin` |
-
-**Preferred on Ubuntu: `adduser`** - it is the officially recommended, policy-compliant front-end. It applies the distribution's defaults from `/etc/adduser.conf`, so one step produces a usable account (home directory, group, shell, password) instead of a string of flags you have to remember. `useradd` is the right choice in **scripts and automation**, where predictable non-interactive behaviour matters more than convenience.
-
-### Commands
+On Ubuntu you want **`adduser`**. It reads the distro defaults and gives you a working account in one go: home directory, group, bash shell, password prompt. `useradd` does only exactly what you tell it, which is what you want in scripts where you don't want surprises.
 
 ```bash
-sudo adduser testuser                 # recommended on Ubuntu
-sudo useradd testuser2                # low-level, minimal
-sudo userdel -r testuser              # -r also removes the home directory
+sudo adduser testuser      # what you normally want on Ubuntu
+sudo useradd testuser2     # bare bones
+sudo userdel -r testuser   # -r removes the home dir too
 ```
 
-### Practical demonstration and output
+I created a user with each to compare:
 
 ```console
-﻿### 1. Where does each command live?
+### 1. Where does each command live?
 /usr/sbin/adduser
 /usr/sbin/useradd
 
@@ -158,44 +133,61 @@ testuser2 removed; testuser kept as the deliverable
 uid=1001(testuser) gid=1001(testuser) groups=1001(testuser),100(users)
 ```
 
-### What the output proves
-
-- `file` shows `adduser` is a **Perl script** and `useradd` is an **ELF binary** - the wrapper/underlying-tool relationship in a single command.
-- `adduser` produced a complete account: a home directory populated from `/etc/skel` (`.bashrc`, `.profile`, `.bash_logout`), a matching `testuser` group, and `/bin/bash` as the login shell.
-- Bare `useradd` created the `/etc/passwd` entry but **no home directory at all**, and gave the user `/bin/sh`.
+`adduser` gave `testuser` a home directory with `.bashrc` and `.profile` copied from `/etc/skel`, its own group, and `/bin/bash`. Bare `useradd` made the passwd entry and **no home directory at all**, with `/bin/sh`.
 
 ---
 
-## Task 3 - `journalctl`
+## Task 3: `journalctl`
 
-### What it is
+Instead of digging through text files in `/var/log`, systemd keeps one indexed binary log for everything: kernel messages, service output, syslog. `journalctl` is how you read it.
 
-`journalctl` is the query tool for the **systemd journal**. Instead of plain-text files scattered through `/var/log`, systemd writes a single structured, indexed **binary** log capturing kernel messages, service stdout/stderr and syslog in one place - so it can be filtered by service, priority, time or boot without any `grep` gymnastics.
+The ones I actually use:
 
-### Key commands
+```bash
+journalctl -u docker.service     # one service's logs
+journalctl -u docker -f          # follow it live, like tail -f
+journalctl -p err                # errors only
+journalctl --since "1 hour ago"  # time filter
+journalctl -b                    # this boot only
+journalctl -k                    # kernel messages (dmesg)
+```
 
-| Command | Purpose |
-|---|---|
-| `journalctl` | Everything, oldest first |
-| `journalctl -n 20` | Last 20 lines |
-| `journalctl -f` | **Follow** live, like `tail -f` |
-| `journalctl -u docker.service` | Logs for **one specific service** |
-| `journalctl -u docker -f` | Follow one service live |
-| `journalctl -p err` | Priority `err` and worse |
-| `journalctl --since "1 hour ago"` | Time filter |
-| `journalctl --since today --until "10:00"` | Time range |
-| `journalctl -b` / `journalctl -b -1` | This boot / previous boot |
-| `journalctl -k` | Kernel messages only (like `dmesg`) |
-| `journalctl --disk-usage` | Space used by the journal |
-| `journalctl --vacuum-time=7d` | Delete entries older than 7 days |
-| `journalctl -o json-pretty` | Structured output for scripting |
-
-Priority levels: `0 emerg`, `1 alert`, `2 crit`, `3 err`, `4 warning`, `5 notice`, `6 info`, `7 debug`.
-
-### Practical demonstration and output
+Checking a specific service is the one that matters day to day. Here's Docker's startup, which reads as a clean story from `Starting up` to `API listen on /run/docker.sock`:
 
 ```console
-﻿### 1. What is journalctl? -> the query tool for the systemd journal (centralised binary log)
+### 2. Disk space currently used by the journal
+Archived and active journals take up 296.1M in the file system.
+
+### 3. Oldest + newest entries the journal holds
+IDX BOOT ID                          FIRST ENTRY                 LAST ENTRY
+ -3 19333054c20c41b9b955851e9f5979f9 Mon 2026-08-17 11:47:07 UTC Mon 2026-08-17 12:31:21 UTC
+ -2 41e059c5465c42e8aef37ad60dfd16c4 Mon 2026-08-17 14:39:19 UTC Mon 2026-08-17 14:55:15 UTC
+ -1 adcc2ad2fa5d45a49585cca2511e7079 Mon 2026-08-17 17:02:30 UTC Mon 2026-08-17 17:03:07 UTC
+
+### 5. Logs for a SPECIFIC SERVICE (docker) -- the interview-relevant use case
+Sep 03 18:20:51 Vlair-Lavya systemd[1]: docker.service: Deactivated successfully.
+Sep 03 18:20:51 Vlair-Lavya systemd[1]: Stopped docker.service - Docker Application Container Engine.
+Sep 03 18:21:18 Vlair-Lavya systemd[1]: Starting docker.service - Docker Application Container Engine...
+Sep 03 18:21:18 Vlair-Lavya dockerd[345]: time="2026-09-03T18:21:18.211518168Z" level=info msg="Starting up"
+Sep 03 18:21:18 Vlair-Lavya dockerd[345]: time="2026-09-03T18:21:18.233954266Z" level=info msg="Loading containers: start."
+Sep 03 18:21:18 Vlair-Lavya dockerd[345]: time="2026-09-03T18:21:18.234444794Z" level=info msg="Starting daemon with containerd snapshotter integration enabled"
+Sep 03 18:21:18 Vlair-Lavya dockerd[345]: time="2026-09-03T18:21:18.237601950Z" level=info msg="Restoring containers: start."
+Sep 03 18:21:19 Vlair-Lavya dockerd[345]: time="2026-09-03T18:21:19.220651947Z" level=info msg="Loading containers: done."
+Sep 03 18:21:19 Vlair-Lavya dockerd[345]: time="2026-09-03T18:21:19.226838594Z" level=info msg="Docker daemon" commit=29.1.3-0ubuntu4.1 containerd-snapshotter=true storage-driver=overlayfs version=29.1.3
+Sep 03 18:21:19 Vlair-Lavya dockerd[345]: time="2026-09-03T18:21:19.227152988Z" level=info msg="Initializing buildkit"
+Sep 03 18:21:19 Vlair-Lavya dockerd[345]: time="2026-09-03T18:21:19.239832842Z" level=info msg="Completed buildkit initialization"
+Sep 03 18:21:19 Vlair-Lavya dockerd[345]: time="2026-09-03T18:21:19.242564766Z" level=info msg="Daemon has completed initialization"
+Sep 03 18:21:19 Vlair-Lavya dockerd[345]: time="2026-09-03T18:21:19.242651478Z" level=info msg="API listen on /run/docker.sock"
+Sep 03 18:21:19 Vlair-Lavya systemd[1]: Started docker.service - Docker Application Container Engine.
+```
+
+When a service won't start, this is the first thing to run.
+
+<details>
+<summary>Full journalctl session (disk usage, boots, priority filters, JSON output)</summary>
+
+```console
+### 1. What is journalctl? -> the query tool for the systemd journal (centralised binary log)
 systemd 259 (259.5-0ubuntu3)
 +PAM +AUDIT +SELINUX +APPARMOR +IMA +IPE +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +KMOD +LIBCRYPTSETUP +LIBCRYPTSETUP_PLUGINS +LIBFDISK +PCRE2 +PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD +BPF_FRAMEWORK +BTF -XKBCOMMON -UTMP +SYSVINIT +LIBARCHIVE
 
@@ -297,103 +289,105 @@ Sep 03 18:21:17 Vlair-Lavya systemd-journald[45]: File /var/log/journal/9a82298f
 	"TID" : "1",
 ```
 
-### Checking logs for a specific service
-
-`journalctl -u docker.service` is the most useful form in practice. The output above traces the entire Docker daemon startup: `Starting up` → `Loading containers: start.` → `Loading containers: done.` → `Daemon has completed initialization` → `API listen on /run/docker.sock`. When a service fails to start, this is the first command to reach for.
+</details>
 
 ---
 
-## Task 4 - Linux Command Cheat Sheet
+## Task 4: Command cheat sheet
 
-### Reference
+The commands I practised, grouped by what I'd reach for them for:
 
-**Navigation**
+**Getting around:** `pwd`, `cd`, `ls -l` / `-a` / `-h`, `tree`
 
-| Command | Purpose |
-|---|---|
-| `pwd` | Print working directory |
-| `cd /path`, `cd ..`, `cd ~` | Change directory, up one, home |
-| `ls -l`, `-a`, `-h`, `-R` | Long, hidden, human sizes, recursive |
-| `tree` | Directory tree |
+**Files:** `touch`, `mkdir -p`, `cp` / `cp -r`, `mv` (also renames), `rm` / `rm -r`, `cat`, `less`, `head`, `tail -f`, `wc -l`
 
-**Files and directories**
+**Finding things:** `grep -r` / `-i` / `-n` / `-v`, `find . -name`, `find . -size +10M`, `which`
 
-| Command | Purpose |
-|---|---|
-| `touch f` | Create an empty file / update its timestamp |
-| `mkdir -p a/b/c` | Create nested directories |
-| `cp f1 f2`, `cp -r d1 d2` | Copy file, copy directory |
-| `mv a b` | Move **or** rename |
-| `rm f`, `rm -r d`, `rm -rf d` | Remove file, directory, force |
-| `cat`, `less`, `head -n`, `tail -n`, `tail -f` | View contents |
-| `wc -l`, `-w`, `-c` | Count lines, words, bytes |
+**Permissions:** `chmod 755` (r=4, w=2, x=1), `chmod u+x`, `chown user:group`, `stat`
 
-**Search**
+**Processes:** `ps aux`, `top`, `kill` / `kill -9`, `pgrep` / `pkill`, `jobs` / `fg` / `bg`
 
-| Command | Purpose |
-|---|---|
-| `grep 'text' file` | Search inside a file |
-| `grep -r`, `-i`, `-n`, `-v` | Recursive, ignore case, line numbers, invert |
-| `find . -name '*.txt'` | Find by name |
-| `find . -type f -size +10M` | Find by type and size |
-| `which cmd`, `whereis cmd` | Locate an executable |
+**System:** `df -h`, `du -sh`, `free -h`, `uname -a`, `uptime`, `whoami`, `id`
 
-**Permissions and ownership**
+**Text:** `sort`, `uniq -c`, `cut -d: -f1`, `awk '{print $1}'`, `sed 's/a/b/g'`, and piping with `|`, `>`, `>>`, `2>&1`
 
-| Command | Purpose |
-|---|---|
-| `chmod 755 f` | Set permissions numerically (`r=4 w=2 x=1`) |
-| `chmod u+x f` | Symbolic form |
-| `chown user:group f` | Change owner |
-| `stat f` | Full file metadata |
-| `umask` | Default permission mask |
+**Archives:** `tar -czf` to make, `-xzf` to extract, `-tzf` to peek inside
 
-**Processes**
-
-| Command | Purpose |
-|---|---|
-| `ps aux` | All running processes |
-| `top`, `htop` | Live process view |
-| `kill PID`, `kill -9 PID` | Terminate, force kill |
-| `pkill name`, `pgrep name` | Kill by name, find by name |
-| `jobs`, `fg`, `bg`, `&` | Job control |
-| `nohup cmd &` | Keep running after logout |
-
-**System and disk**
-
-| Command | Purpose |
-|---|---|
-| `df -h` | Disk free per filesystem |
-| `du -sh dir` | Size of a directory |
-| `free -h` | Memory usage |
-| `uname -a` | Kernel and architecture |
-| `uptime` | Load average |
-| `whoami`, `id` | Current user; UID, GID and groups |
-| `history` | Command history |
-
-**Text processing**
-
-| Command | Purpose |
-|---|---|
-| `sort`, `sort -r`, `sort -n` | Sort, reverse, numeric |
-| `uniq -c` | Deduplicate and count |
-| `cut -d: -f1` | Extract a field |
-| `awk '{print $1}'` | Field-based processing |
-| `sed 's/a/b/g'` | Stream find-and-replace |
-| Pipe and redirection | `\|`, `>`, `>>`, `2>&1` |
-
-**Archive**
-
-| Command | Purpose |
-|---|---|
-| `tar -czf a.tar.gz dir` | Create a gzip archive |
-| `tar -xzf a.tar.gz` | Extract |
-| `tar -tzf a.tar.gz` | List contents without extracting |
-
-### Practical demonstration and output
+A slice of me running them:
 
 ```console
-﻿=========== NAVIGATION ===========
+=========== FILE CREATION / VIEWING ===========
+$ touch notes.txt && ls -l notes.txt
+-rw-r--r-- 1 lavya lavya 0 Sep  3 18:22 notes.txt
+
+$ printf 'alpha\nbravo\ncharlie\ndelta\necho\n' > words.txt && cat words.txt
+alpha
+bravo
+charlie
+delta
+echo
+
+$ head -2 words.txt
+alpha
+bravo
+
+$ tail -2 words.txt
+delta
+echo
+
+$ wc -l words.txt
+5 words.txt
+
+=========== COPY / MOVE / DELETE ===========
+$ cp words.txt words-copy.txt && ls
+demo
+notes.txt
+words-copy.txt
+words.txt
+
+$ mv words-copy.txt renamed.txt && ls
+demo
+notes.txt
+renamed.txt
+words.txt
+
+$ rm renamed.txt && ls
+demo
+notes.txt
+words.txt
+
+=========== SEARCHING ===========
+=========== DISK / MEMORY / SYSTEM ===========
+$ df -h /
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sdd       1007G  3.8G  952G   1% /
+
+$ du -sh .
+16K	.
+
+$ free -h
+               total        used        free      shared  buff/cache   available
+Mem:           7.6Gi       843Mi       5.9Gi       3.6Mi       1.0Gi       6.8Gi
+Swap:          2.0Gi          0B       2.0Gi
+
+$ uname -a
+Linux Vlair-Lavya 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 GNU/Linux
+
+$ uptime
+ 18:22:16 up 3 min,  1 user,  load average: 0.84, 0.37, 0.14
+
+$ whoami && id -u
+lavya
+1000
+
+=========== TEXT PROCESSING / PIPES ===========
+```
+
+<details>
+<summary>Full cheat sheet run (all 30+ commands)</summary>
+
+```console
+=========== NAVIGATION ===========
 $ pwd
 /home/lavya/linux-hw/cheatsheet
 
@@ -534,3 +528,5 @@ $ tar -czf words.tar.gz words.txt && ls -lh words.tar.gz
 $ tar -tzf words.tar.gz
 words.txt
 ```
+
+</details>

@@ -1,37 +1,77 @@
-# Git / GitHub
+# Git and GitHub
 
-Both tasks were run in throwaway repositories so the demonstration commits stay out of this repository's own history. Every output block below is real terminal output.
+I did both tasks in a throwaway repo so I wasn't experimenting on real work.
 
 ---
 
-## Task 1 - `git commit -a -m` vs `git commit -m`
+## Task 1: `git commit -m` vs `git commit -a -m`
 
-### The difference
+Short version: `-a` automatically stages files git is **already tracking**, so you can skip `git add`. It does nothing for brand new files.
 
-Git has three areas: the **working directory** (your files), the **staging area / index** (what will go into the next commit), and the **repository** (committed history).
+To show the difference I modified a tracked file (`file.txt`) and created a new untracked one (`newfile.txt`), then tried to commit without staging anything:
 
-| | `git commit -m "msg"` | `git commit -a -m "msg"` |
-|---|---|---|
-| What it commits | Only what is **already staged** with `git add` | Automatically stages **all modified tracked files**, then commits |
-| Modified tracked files | Ignored unless staged | **Included** |
-| New (untracked) files | Ignored | **Still ignored** |
-| Deleted tracked files | Ignored unless staged | **Included** |
-| Steps | `git add` then `git commit` | One step |
+```console
+$ git status --short
+ M file.txt
+?? newfile.txt
+   M = modified but NOT staged   |   ?? = untracked
 
-The critical point, and the usual interview follow-up: **`-a` does not add untracked files.** It only picks up files Git is already tracking. A brand-new file must always be `git add`-ed first.
+$ git commit -m 'try to commit without staging'
+On branch main
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   file.txt
 
-`-a` is a convenience for the common "I edited a few files that Git already knows about" case. It is worth being deliberate about, because it stages *every* modified tracked file - including changes you may not have meant to commit. Staging explicitly with `git add` gives you control over what goes into each commit.
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	newfile.txt
 
-### Commands
+no changes added to commit (use "git add" and/or "git commit -a")
+$ git status --short
+?? newfile.txt
 
-```bash
-git commit -m "message"       # commits only what is staged
-git add file.txt              # stage a specific file
-git commit -a -m "message"    # auto-stage modified TRACKED files, then commit
-git status --short            # M = modified, ?? = untracked
+>>> RESULT: -a auto-staged the MODIFIED TRACKED file (file.txt) and
+>>> committed it in one step.
+>>> BUT newfile.txt is STILL untracked (?? above) -- -a does NOT add new files.
+
+==================================================================
+ PART C: proving -a ignores UNTRACKED files
+==================================================================
+$ git commit -a -m 'does this pick up newfile.txt?'
+On branch main
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	newfile.txt
+
+nothing added to commit but untracked files present (use "git add" to track)
+
+>>> Nothing to commit: newfile.txt is invisible to -a.
+
+The only way to commit a NEW file is to 'git add' it first:
+$ git add newfile.txt && git commit -m 'add newfile.txt explicitly'
+63bdbae add newfile.txt explicitly
+976571d commit tracked changes automatically
+f2f2782 Initial commit: add file.txt
+
+$ git status
+(clean)
 ```
 
-### Practical demonstration and output
+The commit **refused to happen**. `git commit -m` only commits what's already staged, and I'd staged nothing.
+
+Then `git commit -a -m` worked immediately, picking up the modified `file.txt` in one step. But `newfile.txt` was still sitting there untracked afterwards. Running `-a` again said "nothing added to commit but untracked files present". The only way to get a new file in is `git add` first.
+
+So:
+
+- `git commit -m` = commit what I already staged
+- `git commit -a -m` = stage tracked changes and commit, in one step
+- Neither one picks up new files. `-a` is a shortcut for `add` on *modified* files, not a catch-all.
+
+That last part is the bit worth remembering, and it's why `git add .` is still a habit.
+
+<details>
+<summary>Full walkthrough</summary>
 
 ```console
 ########## SETUP: one tracked file, already committed ##########
@@ -107,35 +147,52 @@ $ git status
 (clean)
 ```
 
-### What the output proves
-
-1. **Part A** - with `file.txt` modified and `newfile.txt` untracked, `git commit -m` **refused to commit**: `no changes added to commit (use "git add" and/or "git commit -a")`. The log still shows only the initial commit.
-2. **Part B** - `git commit -a -m` succeeded immediately: `[main 976571d] ... 1 file changed, 1 insertion(+)`. It auto-staged the modified tracked file.
-3. **Part C** - running `git commit -a -m` again reports `nothing added to commit but untracked files present`. This is the proof that **`-a` never picks up new files**; `newfile.txt` had to be `git add`-ed explicitly.
+</details>
 
 ---
 
-## Task 2 - Git Cherry-Pick
+## Task 2: Cherry-pick
 
-### What cherry-pick does
+The setup: 4 commits on `main`, then a `feature` branch with 3 more. I wanted just the hotfix from `feature` on `main`, without dragging the other two commits along.
 
-`git cherry-pick <hash>` takes the **change introduced by one specific commit** and replays it onto the current branch. It is how you pull a single fix out of a feature branch - for example a hotfix that must ship now, while the rest of that branch is not ready to merge.
-
-Merge and cherry-pick are different tools: **merge** brings across the entire history of a branch, whereas **cherry-pick** copies one commit's diff. The copy is a *new* commit with a **new hash**, because its parent is different.
-
-### Commands
-
-```bash
-git log --oneline                # find the commit
-git log --oneline --grep="TEXT"  # search commit messages
-git show <hash> --stat           # inspect what a commit changed
-git checkout main                # switch to the target branch
-git cherry-pick <hash>           # replay that one commit here
-git cherry-pick --abort          # bail out if it conflicts
-git log --oneline --all --graph  # see the result across branches
+```
+main:     C1 -- C2 -- C3 -- C4
+feature:                     \-- F1 -- F2 (the hotfix) -- F3
 ```
 
-### Practical demonstration and output
+I found the commit I wanted with `git log --oneline --grep=HOTFIX`, switched back to `main`, and picked it:
+
+```console
+ STEP 6: CHERRY-PICK that one commit into main
+==================================================================
+$ git cherry-pick 333ba94
+[main c530656] F2: HOTFIX - the commit we will cherry-pick
+ Date: Thu Sep 3 18:37:28 2026 +0000
+ 1 file changed, 1 insertion(+)
+ create mode 100644 hotfix.txt
+
+
+$ git log --oneline --all --graph   (the cherry-picked commit has a NEW hash)
+* 099896d F3: add documentation
+* 333ba94 F2: HOTFIX - the commit we will cherry-pick
+* e780694 F1: add auth module
+| * c530656 F2: HOTFIX - the commit we will cherry-pick
+|/  
+* be91e10 C4: add gitignore
+* 6595cf4 C3: add config.txt
+* aa674bc C2: add app.py
+* bee27d3 C1: add README
+```
+
+What this shows:
+
+- `hotfix.txt` arrived on `main`, and `auth.py` and `docs.md` (F1 and F3) **did not**. Only the one commit came across.
+- In the graph, the hotfix appears twice with **different hashes**: `333ba94` on `feature`, `c530656` on `main`.
+
+That second point is the thing I actually took away. Cherry-pick doesn't move a commit, it replays the *change* as a brand new commit with a new hash and a new parent. Same diff, different identity. Which is also why cherry-picking a commit and later merging that branch can produce a conflict, since git sees two separate commits making the same edit.
+
+<details>
+<summary>Full walkthrough (all 7 steps)</summary>
 
 ```console
 ==================================================================
@@ -158,12 +215,8 @@ config.txt
  STEP 2: Create a new branch and switch to it
 ==================================================================
 $ git checkout -b feature
-wsl : Switched to a new branch 'feature'
-At line:1 char:581
-+ ... chpad\out'; wsl -d Ubuntu -u lavya -- bash "$sp/git_task2.sh" > "$o\g ...
+Switched to a new branch 'feature'
 +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (Switched to a new branch 'feature':String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
  
 
 ==================================================================
@@ -271,26 +324,4 @@ $ git log --oneline --all --graph   (the cherry-picked commit has a NEW hash)
 * bee27d3 C1: add README
 ```
 
-### What the output proves
-
-Following the required steps exactly:
-
-1. **4 commits created on `main`** - C1 through C4, listed with `git log --oneline`.
-2. **A new branch created** - `git checkout -b feature`.
-3. **3 commits made on `feature`** - F1, F2 (the hotfix) and F3.
-4. **`git log` used to identify one specific commit** - `git log --oneline --grep="HOTFIX"` found `333ba94`, and `git show 333ba94 --stat` confirmed it adds `hotfix.txt`.
-5. **Cherry-picked into `main`** - `git cherry-pick 333ba94` reported `[main c530656] ... create mode 100644 hotfix.txt`.
-6. **Verified** - after the cherry-pick, `main` contains `hotfix.txt` with the correct content, while `auth.py` (F1) and `docs.md` (F3) are **absent**. Only the selected commit came across.
-
-The final graph shows the mechanism clearly:
-
-```
-* 099896d F3: add documentation
-* 333ba94 F2: HOTFIX - the commit we will cherry-pick     <-- original, on feature
-* e780694 F1: add auth module
-| * c530656 F2: HOTFIX - the commit we will cherry-pick   <-- the COPY, on main
-|/
-* be91e10 C4: add gitignore
-```
-
-The same change now exists on both branches under **two different hashes** (`333ba94` on `feature`, `c530656` on `main`). That is the defining characteristic of a cherry-pick: it copies the *change*, not the commit object itself.
+</details>

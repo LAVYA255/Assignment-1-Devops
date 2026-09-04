@@ -1,34 +1,56 @@
-# Networking Fundamentals
+# Networking
 
-Networking commands practised on **Ubuntu 26.04 LTS** (WSL2), with the real output of each and an explanation of what it does and what the result means.
+I ran 15 networking commands and wrote down what each one actually told me.
 
+## The commands, and what I got from them
+
+**`ip addr show`** lists every network interface and its IP. My WSL machine's `eth0` is on `172.21.101.146/20`. This is the modern replacement for `ifconfig`.
+
+**`ip route show`** shows where traffic goes. The `default via ...` line is the gateway, which is where anything not on my local network gets sent. If this line is missing, nothing outside your subnet works.
+
+```console
+########## 2. ip route - show the routing table ##########
+$ ip route show
 ---
+default via 172.21.96.1 dev eth0 proto kernel 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown 
+172.21.96.0/20 dev eth0 proto kernel scope link src 172.21.101.146 
 
-## Command reference
 
-| Command | What it does |
-|---|---|
-| `ip addr show` | Lists network interfaces and their IP addresses |
-| `ip route show` | Shows the routing table, including the default gateway |
-| `hostname` / `hostname -I` | The machine's name / its IP addresses |
-| `ping host` | Tests reachability and measures round-trip latency using ICMP |
-| `traceroute host` | Shows every router hop between you and the destination |
-| `nslookup domain` | Resolves a domain name to an IP address |
-| `dig domain` | Detailed DNS query with full record information |
-| `ss -tuln` | Lists listening sockets (the modern replacement for `netstat`) |
-| `netstat -tuln` | Legacy equivalent of `ss` |
-| `curl url` | Makes an HTTP request from the command line |
-| `wget url` | Downloads a file over HTTP/HTTPS |
-| `ip neigh` | The ARP table - MAC addresses of local neighbours |
-| `nc -zv host port` | Tests whether a specific TCP port is open |
-| `cat /etc/resolv.conf` | Shows which DNS servers the system uses |
-| `cat /etc/hosts` | Static, local name-to-IP mappings checked before DNS |
-
-Flags worth knowing: `-t` TCP, `-u` UDP, `-l` listening only, `-n` numeric (skip DNS lookups, much faster), `-c N` send N pings, `-z` scan without sending data, `-v` verbose.
-
+########## 3. hostname - identify the machine ##########
+$ hostname
 ---
+Vlair-Lavya
+```
 
-## Output of every command
+**`hostname -I`** is the quick way to get the machine's IP without reading through `ip addr`.
+
+**`ping`** sends ICMP packets to test if a host is reachable and how long the round trip takes. To `8.8.8.8` I got 0% loss at around 20ms average. Ping tells you reachability and latency, but nothing about whether a specific *service* is up, since a machine can answer ping while the web server on it is dead.
+
+**`traceroute`** shows every router between me and the target. Going to 8.8.8.8 took 7 hops: my WSL gateway, my home router, my ISP, then into Google's network. It works by sending packets with increasing TTL so each router in turn reports back. Useful for finding *where* a connection slows down rather than just that it's slow.
+
+Interesting: `traceroute google.com` only showed hop 1 and then nothing, while `8.8.8.8` traced all the way. Plenty of routers just don't reply to these probes, so gaps in a traceroute are normal and don't mean the path is broken.
+
+**`nslookup`** and **`dig`** both do DNS lookups, turning a name into an IP. `dig` gives much more detail; `dig google.com +short` cuts it down when you only want the answer. I used `dig google.com MX` to see mail servers.
+
+**`ss -tuln`** lists listening sockets, so it answers "what is running on my machine and on which port". It's the modern, faster replacement for `netstat`. I also ran **`netstat -tuln`** to compare, and the output is nearly the same.
+
+**`curl`** makes an actual HTTP request. `curl -I` fetches just the headers, which is the fastest way to check a status code or a redirect. This is what I used all through the Docker tasks to confirm containers were really serving pages.
+
+**`wget`** also downloads over HTTP, but it saves to a file by default and can recurse through a site. Rough rule I settled on: `curl` to inspect something, `wget` to download it.
+
+**`ip neigh`** shows the ARP table, which maps IP addresses to MAC addresses on the local network. IP routing gets a packet to the right network, then ARP gets it to the right physical machine.
+
+**`nc -zv host port`** tests whether a single TCP port is open. This was the most genuinely useful thing I learned: port 443 on google.com came back `succeeded`, while port 81 timed out. Ping only tells you the machine is alive, but `nc` tells you the *service* is actually accepting connections, which is the question you usually care about.
+
+**`/etc/resolv.conf`** holds the DNS servers the machine uses, and **`/etc/hosts`** is checked before DNS, so it can override any name locally.
+
+## What tied it together
+
+Debugging a connection now has an order to it: `ip addr` (do I have an IP?), `ip route` (is there a gateway?), `ping` (can I reach it?), `dig` (does the name resolve?), `nc` (is the port open?), then `curl` (does the app respond?). Each step rules out one layer.
+
+<details>
+<summary>Full output of all 15 commands</summary>
 
 ```console
 ########## 1. ip addr - show interfaces and IP addresses ##########
@@ -146,7 +168,6 @@ Name:	google.com
 Address: 2404:6800:4000:101d::66
 Name:	google.com
 Address: 2404:6800:4000:101d::8b
-
 
 
 ########## 7. dig - detailed DNS query ##########
@@ -299,73 +320,4 @@ ff02::1 ip6-allnodes
 ff02::2 ip6-allrouters
 ```
 
----
-
-## What I understood from each command
-
-### 1. `ip addr show`
-Lists every network interface with its IP address, MAC address and state. Here `eth0` holds **172.21.101.146/20** - the address WSL2 gets on its virtual switch - alongside the `lo` loopback interface on 127.0.0.1. This is the first command to run when a machine "has no network": if there is no IP on the interface, nothing else will work. The `docker0` interface on **172.17.0.1/16** is the bridge Docker created for containers - it shows up here as soon as Docker is installed.
-
-### 2. `ip route show`
-The routing table - the kernel's decision list for where to send a packet. The `default via ...` line is the **default gateway**, used for any destination not matched by a more specific route. A missing default route is the classic cause of "I can ping local machines but not the internet".
-
-### 3. `hostname` / `hostname -I`
-`hostname` returns the machine's name (`Vlair-Lavya`); `-I` prints just its IP addresses, which is handy in scripts because it avoids parsing `ip addr` output.
-
-### 4. `ping`
-Sends ICMP echo requests and reports which came back and how long each took. Both tests show **0% packet loss**, with round-trip times around 16-31 ms to 8.8.8.8. `ping google.com` additionally proves DNS is working, because the name had to be resolved to 192.178.173.102 before any packet was sent. The `ttl=119` value is the remaining time-to-live: each router decrements it, so a lower number means more hops were crossed.
-
-Pinging an **IP** tests pure connectivity; pinging a **name** tests DNS *and* connectivity. Comparing the two isolates a DNS fault from a routing fault.
-
-### 5. `traceroute`
-Maps the path to a destination by sending packets with deliberately small TTL values, so each router along the way is forced to reply. The trace to 8.8.8.8 shows the full seven-hop path: the WSL gateway (172.21.96.1), the local ISP (`wifi.height8tech.com`, `dvois.com`), then Google's network (72.14.208.165 onwards) and finally `dns.google`. This pinpoints *where* latency appears - the 121 ms jump at hop 2 is the local ISP link.
-
-The trace to `google.com` stops after hop 1 because those routers are configured not to reply to the probes. `*` or an early stop means "this hop stayed silent", not necessarily "the path is broken".
-
-### 6. `nslookup`
-The basic DNS lookup: a domain name in, IP addresses out. It also names the resolver that answered, which matters when you are debugging whether a stale or wrong DNS server is being used.
-
-### 7. `dig`
-A more detailed DNS tool. `dig google.com +noall +answer` prints just the answer section with the record type and its **TTL** (how long it may be cached). `dig google.com MX +short` fetches mail-exchanger records, showing that DNS carries far more than address records - `A`, `AAAA`, `MX`, `CNAME`, `TXT`, `NS`.
-
-### 8. `ss -tuln`
-Lists sockets in the listening state. This answers "is my service actually up, and on which interface?" A service bound to `127.0.0.1` accepts only local connections, while one bound to `0.0.0.0` accepts connections from anywhere - a distinction that explains a great many "the port is open but I cannot connect" problems.
-
-### 9. `netstat -tuln`
-The older tool that does the same job. It still appears everywhere in documentation, but `ss` is faster and is what modern systems ship, so `ss` is the one to reach for.
-
-### 10. `curl`
-Makes HTTP requests from the terminal. `curl -I` fetches only the **response headers**, which is enough to check a status code, a redirect target or which server is answering, without downloading the body. `curl` is the standard tool for testing an API or confirming a web service is alive.
-
-### 11. `wget`
-Downloads files over HTTP/HTTPS. The practical split: `curl` is for *inspecting* and interacting with endpoints, `wget` is for *retrieving* files (and, with `-r`, recursively mirroring a site).
-
-### 12. `ip neigh`
-The ARP table, mapping IP addresses to the MAC addresses of machines on the local segment. ARP is what makes delivery on a local network possible, since Ethernet frames are addressed by MAC, not IP. Relevant only to the local subnet - anything beyond the gateway is never in this table.
-
-### 13. `nc` (netcat)
-Tests whether a TCP port accepts connections. The contrast in the output is the useful part: port **443 on google.com reports `open`**, while port **81 times out**. This distinguishes "the host is up but the service is not listening" from "the host is unreachable", and is the fastest way to check whether a firewall is blocking a port.
-
-### 14. `/etc/resolv.conf`
-Lists the DNS servers (`nameserver` entries) the system consults. If name resolution fails while raw IP connectivity works, this file is the first place to look.
-
-### 15. `/etc/hosts`
-Static name-to-IP mappings, checked **before** DNS. Useful for pointing a hostname at a test server locally without touching real DNS - and worth remembering, because an entry here silently overrides the DNS answer.
-
----
-
-## The mental model
-
-The commands map onto the network stack, and that ordering is what makes troubleshooting systematic:
-
-| Layer | Question | Command |
-|---|---|---|
-| Interface | Do I have an IP? | `ip addr` |
-| Routing | Do I know where to send packets? | `ip route` |
-| Reachability | Can I reach the destination? | `ping` |
-| Path | Where does it break or slow down? | `traceroute` |
-| Naming | Do names resolve to addresses? | `nslookup`, `dig` |
-| Ports | Is the service listening / reachable? | `ss`, `nc` |
-| Application | Does the service answer correctly? | `curl` |
-
-Working down that list in order localises almost any connectivity fault to a single layer.
+</details>

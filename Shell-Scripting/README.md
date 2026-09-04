@@ -1,27 +1,21 @@
-# Shell Scripting - System Information Script
+# Shell Scripting: system information script
 
-The script [`sysinfo.sh`](sysinfo.sh) prints system information, takes input from the user, creates a directory and a file, and saves the running-process list into that file using output redirection.
+[`sysinfo.sh`](sysinfo.sh) prints system info, asks me where to save a report, creates the folder and file, and dumps the running processes into it.
 
----
+## What the task asked for, and where it happens
 
-## Requirements checklist
-
-| Requirement | How the script does it | Line reference |
-|---|---|---|
-| Prints the current date | `CURRENT_DATE=$(date)` then `echo "$CURRENT_DATE"` | Variables + section 1 |
-| Prints the hostname | `HOST_NAME=$(hostname)` | Variables + section 1 |
-| Prints the username | `USER_NAME=$(whoami)` | Variables + section 1 |
-| Prints the disk usage | `df -h` | Section 1 |
-| Prints the running processes | `ps aux \| head -10` | Section 1 |
-| Uses variables to store and use data | `CURRENT_DATE`, `HOST_NAME`, `USER_NAME`, `SEPARATOR`, `DIR_NAME`, `FILE_NAME` | Throughout |
-| Takes user input using `read -p` | `read -p "Enter a name for the report directory: " DIR_NAME` | Section 2 |
-| Creates a directory using `mkdir` | `mkdir -p "$DIR_NAME"` | Section 3 |
-| Creates a file using `touch` | `touch "$DIR_NAME/$FILE_NAME"` | Section 3 |
-| Stores processes in the file using `>` | `ps aux > "$DIR_NAME/$FILE_NAME"` | Section 4 |
-
-All ten required commands are used: `mkdir`, `touch`, `echo`, `df`, `ps`, `read -p`, variables and `>` redirection.
-
----
+| Required | In the script |
+|---|---|
+| Current date | `CURRENT_DATE=$(date)` |
+| Hostname | `HOST_NAME=$(hostname)` |
+| Username | `USER_NAME=$(whoami)` |
+| Disk usage | `df -h` |
+| Running processes | `ps aux \| head -10` |
+| Use variables | `CURRENT_DATE`, `HOST_NAME`, `DIR_NAME`, `FILE_NAME` |
+| Take input with `read -p` | `read -p "Enter a name for the report directory: " DIR_NAME` |
+| Create a directory | `mkdir -p "$DIR_NAME"` |
+| Create a file | `touch "$DIR_NAME/$FILE_NAME"` |
+| Save processes with `>` | `ps aux > "$DIR_NAME/$FILE_NAME"` |
 
 ## The script
 
@@ -105,23 +99,40 @@ echo "Report complete."
 echo "$SEPARATOR"
 ```
 
----
-
-## How to run it
+## Running it
 
 ```bash
 chmod +x sysinfo.sh
 ./sysinfo.sh
 ```
 
-The script pauses at two `read -p` prompts. In the captured run below the answers `system_reports` and `running_processes.txt` were supplied on standard input, which is why the prompt text itself does not appear in the transcript - Bash only renders a `read -p` prompt when standard input is an interactive terminal.
+It stops at two prompts. I answered `system_reports` and `running_processes.txt`.
 
----
+One thing that confused me at first: when I piped the answers in instead of typing them, the prompt text vanished from the output. That's because Bash only draws a `read -p` prompt when input is coming from a real terminal, not a pipe. The values still got read fine.
 
-## Output
+The part that proves the redirection worked:
 
 ```console
-﻿========================================================
+Directory created: system_reports
+File created: system_reports/running_processes.txt
+Running processes saved to: system_reports/running_processes.txt
+
+--- Proof the file was written (first 5 lines) ---
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root           1  2.1  0.1  24548 15484 ?        Ss   18:23   0:00 /sbin/init
+root           2  0.0  0.0   3180  2204 hvc0     Sl+  18:23   0:00 /init
+
+--- Line count of the saved report ---
+43
+```
+
+The screen only showed 10 processes because of `head -10`, but the saved file has all **43**. The `>` captured the full `ps aux`, not the trimmed view. That difference is the whole point of the redirection.
+
+<details>
+<summary>Full run (date, hostname, user, disk usage, processes, file verification)</summary>
+
+```console
+========================================================
                  SYSTEM INFORMATION REPORT
 ========================================================
 
@@ -200,15 +211,4 @@ total 8
 -rw-r--r-- 1 lavya lavya 4589 Sep  3 18:23 running_processes.txt
 ```
 
----
-
-## What the output demonstrates
-
-- **Date, hostname and username** are read into variables and printed back.
-- **`df -h`** lists every mounted filesystem with human-readable sizes.
-- **`ps aux | head -10`** shows the running processes.
-- The two **`read -p`** prompts captured `system_reports` and `running_processes.txt`.
-- **`mkdir -p`** created the directory and **`touch`** created the file - both confirmed by the final `ls -lR`, which shows `system_reports/running_processes.txt` at 4589 bytes.
-- **`ps aux > "$DIR_NAME/$FILE_NAME"`** redirected the full process table into the file; `wc -l` counts **43 lines**, and `head -5` prints the saved content back to prove the redirection worked.
-
-Note that `head -10` in the on-screen listing shows 10 lines, while the saved file holds all 43 processes - the redirection captured the complete `ps aux` output, not the truncated view.
+</details>
